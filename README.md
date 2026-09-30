@@ -2,12 +2,15 @@
 
 Break any topic down into a tree (a problem, an issue tree, a work breakdown), attach your own attributes, and export it to a Google Sheet where each parent cell is merged down across its children.
 
-Status: **POC stage**. See `poc/`.
+Status: **POC stage**. POC-A (layout) is signed off; POC-B needs Google Cloud setup (`poc/02-google-export/SETUP.md`); POC-C (editor) is ready to try.
 
 ```bash
 npm install
 npm test            # tree → grid layout rules + Sheets payload
-npm run dev         # http://localhost:5173/poc/01-sheet-layout/  and  /poc/02-google-export/
+npm run dev         # then open one of:
+                    #   /poc/03-editor/        synced outline + map editor (POC-C)
+                    #   /poc/01-sheet-layout/  tree → Sheet layout samples (POC-A)
+                    #   /poc/02-google-export/ one-click Google Sheets export (POC-B)
 npm run poc:xlsx    # writes sample .xlsx files to poc/01-sheet-layout/out/
 ```
 
