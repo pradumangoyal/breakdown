@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POC-A · Sheet layout</title>
+    <style>
+      :root {
+        --bg: #f7f7f8; --panel: #fff; --ink: #1d2129; --muted: #626a78; --line: #b7bcc4;
+        --head: #eef0f3; --accent: #2f6fdf; --warn: #9a5b00;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px/1.4 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
+      header { padding: 16px 20px 0; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p.sub { margin: 0 0 12px; color: var(--muted); }
+      nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 20px; }
+      nav button { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 10px; cursor: pointer; font: inherit; }
+      nav button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+      .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 20px; color: var(--muted); }
+      .bar button { font: inherit; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+      .warn { color: var(--warn); }
+      .sheet { margin: 0 20px 24px; overflow: auto; max-height: calc(100vh - 160px); background: var(--panel); border: 1px solid var(--line); }
+      table.grid { border-collapse: collapse; table-layout: fixed; font: 13px/1.35 Arial, sans-serif; }
+      table.grid td, table.grid th { border: 1px solid var(--line); padding: 3px 6px; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+      table.grid .k-title { font-size: 16px; font-weight: 700; border: 0; padding: 6px; vertical-align: middle; }
+      table.grid .k-meta { font-style: italic; color: var(--muted); border: 0; }
+      table.grid th { background: var(--head); font-weight: 700; position: sticky; top: 0; }
+      table.grid .k-attr { color: #33415c; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>POC-A · Tree → Sheet layout</h1>
+      <p class="sub">Same Grid model that will be sent to Google Sheets. Merged cells shown with rowspan/colspan.</p>
+    </header>
+    <nav id="tabs"></nav>
+    <div class="bar" id="bar"></div>
+    <div class="sheet" id="sheet"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

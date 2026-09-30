@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POC-B · Google export</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      :root { --bg: #f7f7f8; --panel: #fff; --ink: #1d2129; --muted: #626a78; --line: #c9cdd4; --accent: #2f6fdf; --ok: #16794a; --err: #b42318; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 20px; font: 14px/1.45 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
+      main { max-width: 760px; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p { margin: 0 0 12px; color: var(--muted); }
+      section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+      label { display: block; font-weight: 600; margin-bottom: 6px; }
+      input, select { width: 100%; font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      #log { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; margin: 0; color: var(--ink); }
+      .ok { color: var(--ok); } .err { color: var(--err); }
+      a.open { display: inline-block; margin-top: 8px; font-weight: 600; color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>POC-B · One-click export to Google Sheets</h1>
+      <p>Signs in with Google (scope: only files this app creates), then creates a new Sheet from the same Grid as POC-A.</p>
+      <section>
+        <label for="cid">OAuth Web client ID</label>
+        <input id="cid" placeholder="1234567890-abc….apps.googleusercontent.com" autocomplete="off" spellcheck="false" />
+      </section>
+      <section>
+        <label for="sample">Sample map</label>
+        <div class="row">
+          <select id="sample" style="flex:1"></select>
+          <button id="go">Export to Google Sheets</button>
+        </div>
+        <div id="link"></div>
+      </section>
+      <section><pre id="log">Waiting…</pre></section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
