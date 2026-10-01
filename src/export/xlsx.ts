@@ -20,6 +20,7 @@ export function gridToWorkbook(grid: Grid): ExcelJS.Workbook {
       x.alignment = { wrapText: true, vertical: cell.kind === 'title' ? 'middle' : 'top' };
       if (cell.kind === 'title') x.font = { bold: true, size: 14 };
       if (cell.kind === 'meta') x.font = { italic: true, color: { argb: 'FF555B66' } };
+      if (cell.kind === 'na') x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F4' } };
       if (cell.kind === 'header') {
         x.font = { bold: true };
         x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF0F3' } };

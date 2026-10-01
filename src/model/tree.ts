@@ -1,4 +1,4 @@
-import type { AttrDef, AttrValue, MapDoc } from './types';
+import type { AttrDef, AttrScope, AttrValue, MapDoc } from './types';
 
 /**
  * Pure tree operations. They mutate the doc passed in (use them inside an immer
@@ -126,13 +126,36 @@ export function setAttr(doc: MapDoc, id: string, attrId: string, value: AttrValu
 }
 
 /** Registers an attribute (or returns the existing one with the same name). */
-export function addAttribute(doc: MapDoc, name: string, type: AttrDef['type'] = 'text'): string {
+export function addAttribute(doc: MapDoc, name: string, type: AttrDef['type'] = 'text', scope?: AttrScope): string {
   const clean = name.trim();
   const existing = doc.attributes.find((a) => a.name.toLowerCase() === clean.toLowerCase());
   if (existing) return existing.id;
   const id = `a${Math.random().toString(36).slice(2, 8)}`;
-  doc.attributes.push({ id, name: clean, type });
+  doc.attributes.push(scope ? { id, name: clean, type, scope } : { id, name: clean, type });
   return id;
+}
+
+/** Rename / retype / rescope. Values are kept even if some nodes fall out of scope. */
+export function updateAttribute(doc: MapDoc, id: string, patch: Partial<Omit<AttrDef, 'id'>>) {
+  const a = doc.attributes.find((x) => x.id === id);
+  if (!a) return;
+  if (patch.name !== undefined && patch.name.trim()) a.name = patch.name.trim();
+  if (patch.type) a.type = patch.type;
+  if (patch.scope) a.scope = patch.scope;
+}
+
+/** Deletes the attribute and its values on every node. */
+export function removeAttribute(doc: MapDoc, id: string) {
+  doc.attributes = doc.attributes.filter((a) => a.id !== id);
+  for (const n of Object.values(doc.nodes)) delete n.attrs[id];
+}
+
+/** Moves an attribute one place left/right in the column order. */
+export function moveAttribute(doc: MapDoc, id: string, delta: -1 | 1) {
+  const i = doc.attributes.findIndex((a) => a.id === id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= doc.attributes.length) return;
+  [doc.attributes[i], doc.attributes[j]] = [doc.attributes[j], doc.attributes[i]];
 }
 
 export function blankDoc(title = 'New breakdown'): MapDoc {

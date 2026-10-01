@@ -28,7 +28,7 @@ export function problemTree(): MapDoc {
   );
 }
 
-/** 2. HBR-style work breakdown: 7 L1 items, depth 3–5, attributes at L1, L2 and on end nodes. */
+/** 2. HBR-style work breakdown: 7 L1 items, depth 3–5, attributes scoped to L1, L2, end nodes and the centre. */
 export function wbs(): MapDoc {
   const leaf = (t: string, POC: string, Status = 'To do', Remark = ''): NodeSpec => ({ t, a: { Status, POC, Remark } });
   return buildDoc(
@@ -103,7 +103,15 @@ export function wbs(): MapDoc {
       ],
     },
     {
-      attributes: [{ name: 'Owner' }, { name: 'Budget (₹k)', type: 'number' }, { name: 'Status' }, { name: 'POC' }, { name: 'Remark' }, { name: 'Sponsor' }, { name: 'Deadline' }],
+      attributes: [
+        { name: 'Owner', scope: { nodes: 'levels', levels: [1] } },
+        { name: 'Budget (₹k)', type: 'number', scope: { nodes: 'levels', levels: [2] } },
+        { name: 'Status', scope: { nodes: 'end' } },
+        { name: 'POC', scope: { nodes: 'end' } },
+        { name: 'Remark', scope: { nodes: 'end' } },
+        { name: 'Sponsor', scope: { nodes: 'levels', levels: [0] } },
+        { name: 'Deadline', scope: { nodes: 'levels', levels: [0] } },
+      ],
     },
   );
 }

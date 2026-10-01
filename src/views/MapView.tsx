@@ -3,6 +3,7 @@ import { select } from 'd3-selection';
 import { zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3-zoom';
 import { useEditor } from '../model/store';
 import { countDescendants } from '../model/tree';
+import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
 import { H_GAP, PAD, layoutMap, type Box, type Size } from './layout';
@@ -235,6 +236,9 @@ export function MapView() {
   };
 
   const attrNames = useMemo(() => new Map(doc.attributes.map((a) => [a.id, a])), [doc.attributes]);
+  const applies = useMemo(() => scopeTester(doc), [doc]);
+  /** Filled, in-scope attribute ids per node (joined, so memoised nodes compare cheaply). */
+  const shownAttrs = (n: Node) => doc.attributes.filter((a) => applies(a, n.id) && String(n.attrs[a.id] ?? '').trim() !== '').map((a) => a.id).join(',');
 
   return (
     <div
@@ -282,6 +286,7 @@ export function MapView() {
             editing={id === editingId}
             seed={id === editingId && seed?.id === id ? seed.text : null}
             attrNames={attrNames}
+            shown={shownAttrs(doc.nodes[id])}
             register={register}
             onDone={endEdit}
           />
@@ -332,13 +337,14 @@ interface MapNodeProps {
   editing: boolean;
   seed: string | null;
   attrNames: Map<string, AttrDef>;
+  shown: string;
   register: (id: string, el: HTMLDivElement | null) => void;
   onDone: () => void;
 }
 
-const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, seed, attrNames, register, onDone }: MapNodeProps) {
+const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, seed, attrNames, shown, register, onDone }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
-  const chips = Object.entries(node.attrs).filter(([k, v]) => attrNames.has(k) && String(v).trim() !== '');
+  const chips = shown ? shown.split(',').map((k) => [k, node.attrs[k]] as const) : [];
   const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${dim ? ' dim' : ''}`;
   const summary = chips.map(([k, v]) => `${attrNames.get(k)!.name}: ${String(v)}`);
 

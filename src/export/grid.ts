@@ -1,4 +1,7 @@
 import type { AttrDef, AttrValue, MapDoc, Node } from '../model/types';
+import { levelName, scopeOf, scopeTester } from '../model/scope';
+
+export { levelName };
 
 /**
  * Tree → spreadsheet layout. Pure; shared by the in-app preview, the Google
@@ -11,9 +14,12 @@ import type { AttrDef, AttrValue, MapDoc, Node } from '../model/types';
  *  - an end node shallower than the deepest one merges rightward to the last level column
  *  - attributes of nodes with children → column right after that level, merged down
  *  - attributes of end nodes → columns after the last level column
+ *  - an attribute only fills cells of nodes in its scope; where it doesn't apply the cell is grey ('na').
+ *    Scoped attributes (end nodes / levels) get their columns even while empty, so the team can fill
+ *    them in the Sheet; "all nodes" attributes only get columns where a value exists.
  */
 
-export type CellKind = 'title' | 'meta' | 'header' | 'node' | 'attr' | 'empty' | 'covered';
+export type CellKind = 'title' | 'meta' | 'header' | 'node' | 'attr' | 'empty' | 'na' | 'covered';
 
 export interface GridCell {
   value: AttrValue | null;
@@ -64,10 +70,6 @@ interface Placed {
   isLeaf: boolean;
 }
 
-export function levelName(doc: MapDoc, level: number): string {
-  return doc.levelNames[level - 1]?.trim() || `Level ${level}`;
-}
-
 const hasValue = (v: AttrValue | undefined): v is AttrValue =>
   v !== undefined && !(typeof v === 'string' && v.trim() === '');
 
@@ -84,7 +86,9 @@ export function treeToGrid(doc: MapDoc): Grid {
   const root = doc.nodes[doc.rootId];
   if (!root) throw new Error(`Root node ${doc.rootId} not found`);
   const defs = new Map(doc.attributes.map((a) => [a.id, a]));
+  const applies = scopeTester(doc);
   const unknownAttrs = new Set<string>();
+  let outOfScope = 0;
 
   // 1. Walk the tree: depth, leaf row range, outline code.
   const placed: Placed[] = [];
@@ -123,11 +127,18 @@ export function treeToGrid(doc: MapDoc): Grid {
   const midUsed: Array<Set<string>> = Array.from({ length: maxDepth + 1 }, () => new Set());
   const leafUsed = new Set<string>();
   for (const p of placed) {
-    for (const [key, v] of Object.entries(p.node.attrs)) {
-      if (!defs.has(key) || !hasValue(v)) continue;
-      (p.isLeaf ? leafUsed : midUsed[p.depth]).add(key);
+    for (const def of doc.attributes) {
+      const inScope = applies(def, p.node.id);
+      const filled = hasValue(p.node.attrs[def.id]);
+      if (filled && !inScope) outOfScope++;
+      const scope = scopeOf(def).nodes;
+      // Eager columns: end-node attributes for in-scope end nodes, level attributes for in-scope parents.
+      const eager = inScope && ((scope === 'end' && p.isLeaf) || (scope === 'levels' && !p.isLeaf));
+      if ((filled && inScope) || eager) (p.isLeaf ? leafUsed : midUsed[p.depth]).add(def.id);
     }
   }
+  for (const def of doc.attributes) if (hasValue(root.attrs[def.id]) && !applies(def, root.id)) outOfScope++;
+  if (outOfScope) warnings.push(`${outOfScope} value(s) were left out because their node is outside the attribute’s scope.`);
 
   const columns: GridColumn[] = [];
   const levelCol: number[] = [];
@@ -162,7 +173,7 @@ export function treeToGrid(doc: MapDoc): Grid {
   fullRow(title, 'title');
 
   const rootMeta = doc.attributes
-    .filter((def) => hasValue(root.attrs[def.id]))
+    .filter((def) => hasValue(root.attrs[def.id]) && applies(def, root.id))
     .map((def) => `${def.name}: ${root.attrs[def.id]}`);
   if (rootMeta.length) fullRow(rootMeta.join('  ·  '), 'meta');
 
@@ -187,15 +198,19 @@ export function treeToGrid(doc: MapDoc): Grid {
     if (p.isLeaf) {
       put(p.first, col, p.first, levelCol[maxDepth], nodeCell);
       for (const [attrId, c] of leafCol) {
+        const def = defs.get(attrId)!;
         const v = p.node.attrs[attrId];
-        if (hasValue(v)) rows[dataStart + p.first][c] = { value: coerce(defs.get(attrId)!, v), kind: 'attr', nodeId: p.node.id };
+        if (!applies(def, p.node.id)) rows[dataStart + p.first][c] = { value: null, kind: 'na' };
+        else if (hasValue(v)) rows[dataStart + p.first][c] = { value: coerce(def, v), kind: 'attr', nodeId: p.node.id };
       }
     } else {
       put(p.first, col, p.last, col, nodeCell);
       for (const [attrId, c] of midCol[p.depth]) {
+        const def = defs.get(attrId)!;
         const v = p.node.attrs[attrId];
-        put(p.first, c, p.last, c, hasValue(v)
-          ? { value: coerce(defs.get(attrId)!, v), kind: 'attr', depth: p.depth, nodeId: p.node.id }
+        put(p.first, c, p.last, c,
+          !applies(def, p.node.id) ? { value: null, kind: 'na', depth: p.depth }
+          : hasValue(v) ? { value: coerce(def, v), kind: 'attr', depth: p.depth, nodeId: p.node.id }
           : { value: null, kind: 'empty', depth: p.depth });
       }
     }

@@ -11,6 +11,8 @@ const SHEET_ID = 0;
 const GREY = { red: 0.72, green: 0.74, blue: 0.77 };
 const HEAD_BG = { red: 0.93, green: 0.94, blue: 0.95 };
 const META_FG = { red: 0.33, green: 0.36, blue: 0.4 };
+/** Cells where an attribute doesn't apply. */
+const NA_BG = { red: 0.95, green: 0.95, blue: 0.96 };
 /** Spare rows/columns so the Sheet can keep growing after it takes over. */
 const SPARE_ROWS = 50;
 const SPARE_COLS = 5;
@@ -22,6 +24,7 @@ const range = (r0: number, r1: number, c0: number, c1: number) => ({
 });
 
 function cellData(cell: GridCell): Json {
+  if (cell.kind === 'na') return { userEnteredFormat: { backgroundColor: NA_BG } };
   if (cell.value === null || cell.kind === 'covered') return {};
   // stringValue is always literal: "=SUM(…)" or "+91…" stays text, never a formula.
   return typeof cell.value === 'number'

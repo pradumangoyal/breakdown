@@ -8,6 +8,7 @@ import { Outline } from '../../src/views/Outline';
 import { MapView } from '../../src/views/MapView';
 import { AttributePanel } from '../../src/views/AttributePanel';
 import { SheetPreview } from '../../src/views/SheetPreview';
+import { TableView } from '../../src/views/TableView';
 import { problemTree, randomTree, wbs } from '../01-sheet-layout/samples';
 import '../../src/views/editor.css';
 
@@ -41,6 +42,13 @@ export function App() {
   const [showSheet, setShowSheet] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
   const [showAttrs, setShowAttrs] = useState(() => window.innerWidth >= 1000);
+  const [view, setViewState] = useState<'map' | 'table'>(() => {
+    try { return localStorage.getItem('mindmap.view') === 'table' ? 'table' : 'map'; } catch { return 'map'; }
+  });
+  const setView = (v: 'map' | 'table') => {
+    setViewState(v);
+    try { localStorage.setItem('mindmap.view', v); } catch { /* per-viewer preference only */ }
+  };
 
   useEffect(() => {
     const saved = loadSaved();
@@ -82,6 +90,10 @@ export function App() {
         <button disabled={!canRedo} onClick={() => useEditor.getState().redo()} title="Redo (⇧⌘Z)">Redo</button>
         <span className="stat">{Object.keys(doc.nodes).length} nodes · autosaved in this browser</span>
         <span className="spacer" />
+        <span className="seg" role="group" aria-label="View">
+          <button className={view === 'map' ? 'on' : ''} aria-pressed={view === 'map'} onClick={() => setView('map')}>Map</button>
+          <button className={view === 'table' ? 'on' : ''} aria-pressed={view === 'table'} onClick={() => setView('table')}>Table</button>
+        </span>
         <button className={showSheet ? 'on' : ''} onClick={() => setShowSheet((v) => !v)}>Sheet preview</button>
         <button className={showAttrs ? 'on' : ''} onClick={() => setShowAttrs((v) => !v)}>Attributes</button>
         <button className={showHelp ? 'on' : ''} onClick={() => setShowHelp((v) => !v)}>Keys</button>
@@ -90,7 +102,9 @@ export function App() {
       <div className={`body${showAttrs ? '' : ' no-attrs'}`}>
         <Profiler id="outline" onRender={prof}><Outline /></Profiler>
         <div className={`center${showSheet ? ' with-sheet' : ''}`}>
-          <Profiler id="map" onRender={prof}><MapView /></Profiler>
+          {view === 'map'
+            ? <Profiler id="map" onRender={prof}><MapView /></Profiler>
+            : <Profiler id="table" onRender={prof}><TableView onAddAttribute={() => setShowAttrs(true)} /></Profiler>}
           {showSheet && <Profiler id="sheet" onRender={prof}><SheetPreview onDownload={downloadXlsx} /></Profiler>}
         </div>
         <Profiler id="attrs" onRender={prof}><AttributePanel /></Profiler>
@@ -107,6 +121,7 @@ function KeyHelp() {
           <h4>Outline</h4>
           <dl>
             <dt>Enter</dt><dd>New item below (first child if expanded)</dd>
+            <dt>⇧Enter</dt><dd>Line break inside the item</dd>
             <dt>Tab / ⇧Tab</dt><dd>Indent / outdent</dd>
             <dt>↑ / ↓</dt><dd>Previous / next item</dd>
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
@@ -120,6 +135,7 @@ function KeyHelp() {
           <dl>
             <dt>Tab</dt><dd>Add child</dd>
             <dt>Enter</dt><dd>Add sibling (while editing: finish)</dd>
+            <dt>⇧Enter</dt><dd>Line break while editing</dd>
             <dt>Type / F2 / Space</dt><dd>Edit (typing replaces)</dd>
             <dt>Arrows</dt><dd>Parent · child · siblings</dd>
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
@@ -129,6 +145,12 @@ function KeyHelp() {
           </dl>
         </div>
       </div>
+      <h4 style={{ marginTop: 12 }}>Table</h4>
+      <dl>
+        <dt>Tab / ⇧Tab</dt><dd>Next / previous cell (skips cells that don't apply)</dd>
+        <dt>Enter / ↓</dt><dd>Same column, next row</dd>
+        <dt>⇧Enter / ↑</dt><dd>Same column, previous row</dd>
+      </dl>
       <p className="ap-hint" style={{ margin: '10px 0 0' }}>⌘Z / ⇧⌘Z undo and redo everywhere.</p>
     </div>
   );

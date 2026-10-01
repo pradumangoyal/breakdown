@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import { useEditor } from '../model/store';
 import { indexTree } from '../model/tree';
+import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { AutoTextarea, caretOnFirstLine, caretOnLastLine } from './AutoTextarea';
 
@@ -12,6 +13,7 @@ export function Outline() {
   const focusArea = useEditor((s) => s.focusArea);
   const index = useMemo(() => indexTree(doc), [doc]);
   const attrNames = useMemo(() => new Map(doc.attributes.map((a) => [a.id, a])), [doc.attributes]);
+  const applies = useMemo(() => scopeTester(doc), [doc]);
 
   return (
     <div className="ol" role="tree">
@@ -23,6 +25,7 @@ export function Outline() {
           selected={id === selectedId}
           focused={focusArea === 'outline' && id === selectedId}
           attrNames={attrNames}
+          shown={doc.attributes.filter((a) => applies(a, id) && String(doc.nodes[id].attrs[a.id] ?? '').trim() !== '').map((a) => a.id).join(',')}
         />
       ))}
     </div>
@@ -35,9 +38,11 @@ interface RowProps {
   selected: boolean;
   focused: boolean;
   attrNames: Map<string, AttrDef>;
+  /** Filled, in-scope attribute ids (joined). */
+  shown: string;
 }
 
-const Row = memo(function Row({ node, depth, selected, focused, attrNames }: RowProps) {
+const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown }: RowProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Keep keyboard focus on the selected row, also after indent/outdent moved it in the DOM.
@@ -78,7 +83,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames }: Row
     const s = useEditor.getState();
     if (s.selectedId !== node.id || s.focusArea !== 'outline') s.select(node.id, 'outline');
   };
-  const chips = Object.entries(node.attrs).filter(([k, v]) => attrNames.has(k) && String(v).trim() !== '');
+  const chips = shown ? shown.split(',').map((k) => [k, node.attrs[k]] as const) : [];
   const hasKids = node.children.length > 0;
 
   return (

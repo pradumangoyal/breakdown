@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { produce } from 'immer';
-import type { AttrValue, MapDoc } from './types';
+import type { AttrDef, AttrScope, AttrValue, MapDoc } from './types';
 import * as T from './tree';
 
 /**
@@ -9,7 +9,7 @@ import * as T from './tree';
  * edits on the same node are merged into one undo step.
  */
 
-export type FocusArea = 'outline' | 'map';
+export type FocusArea = 'outline' | 'map' | 'table';
 
 interface EditorState {
   doc: MapDoc;
@@ -38,7 +38,10 @@ interface EditorActions {
   setText(id: string, text: string): void;
   toggle(id: string, collapsed?: boolean): void;
   setAttr(id: string, attrId: string, value: AttrValue | undefined): void;
-  addAttribute(name: string, type?: 'text' | 'number'): string;
+  addAttribute(name: string, type?: 'text' | 'number', scope?: AttrScope): string;
+  updateAttribute(id: string, patch: Partial<Omit<AttrDef, 'id'>>): void;
+  removeAttribute(id: string): void;
+  moveAttribute(id: string, delta: -1 | 1): void;
   setLevelName(level: number, name: string): void;
   setNumbering(on: boolean): void;
 }
@@ -119,11 +122,14 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
     setText: (id, text) => apply((d) => T.setText(d, id, text), `text:${id}`),
     toggle: (id, collapsed) => apply((d) => T.setCollapsed(d, id, collapsed ?? !d.nodes[id].collapsed)),
     setAttr: (id, attrId, value) => apply((d) => T.setAttr(d, id, attrId, value), `attr:${id}:${attrId}`),
-    addAttribute: (name, type) => {
+    addAttribute: (name, type, scope) => {
       let attrId = '';
-      apply((d) => { attrId = T.addAttribute(d, name, type); });
+      apply((d) => { attrId = T.addAttribute(d, name, type, scope); });
       return attrId;
     },
+    updateAttribute: (id, patch) => apply((d) => T.updateAttribute(d, id, patch)),
+    removeAttribute: (id) => apply((d) => T.removeAttribute(d, id)),
+    moveAttribute: (id, delta) => apply((d) => T.moveAttribute(d, id, delta)),
     setLevelName: (level, name) => apply((d) => {
       while (d.levelNames.length < level) d.levelNames.push('');
       d.levelNames[level - 1] = name;
