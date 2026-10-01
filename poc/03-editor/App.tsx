@@ -9,6 +9,7 @@ import { MapView } from '../../src/views/MapView';
 import { AttributePanel } from '../../src/views/AttributePanel';
 import { SheetPreview } from '../../src/views/SheetPreview';
 import { TableView } from '../../src/views/TableView';
+import { StatusBar } from '../../src/views/StatusBar';
 import { problemTree, randomTree, wbs } from '../01-sheet-layout/samples';
 import '../../src/views/editor.css';
 
@@ -109,6 +110,7 @@ export function App() {
         </div>
         <Profiler id="attrs" onRender={prof}><AttributePanel /></Profiler>
       </div>
+      <StatusBar />
     </div>
   );
 }
@@ -126,6 +128,7 @@ function KeyHelp() {
             <dt>↑ / ↓</dt><dd>Previous / next item</dd>
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
             <dt>⌘↑ / ⌘↓</dt><dd>Collapse / expand</dd>
+            <dt>Esc</dt><dd>Stop editing (row stays selected: ↑↓ move, ⇧Enter edit, Esc deselect)</dd>
             <dt>⌫ on empty</dt><dd>Delete item</dd>
             <dt>⇧⌘⌫</dt><dd>Delete item with children</dd>
           </dl>
@@ -136,11 +139,11 @@ function KeyHelp() {
             <dt>Enter</dt><dd>Add sibling below</dd>
             <dt>Tab</dt><dd>Add child</dd>
             <dt>⇧Enter / F2 / Space</dt><dd>Edit the selected node</dd>
-            <dt>Type a letter</dt><dd>Replace its text</dd>
             <dt>While writing new</dt><dd>Enter → next sibling · empty Enter / Esc → stop</dd>
             <dt>⇧Enter (editing)</dt><dd>Line break</dd>
             <dt>← / →</dt><dd>Parent / first child</dd>
-            <dt>↑ / ↓</dt><dd>Node above / below in the same level</dd>
+            <dt>↑ / ↓</dt><dd>Next logical node: sibling, else the next branch at this level, else that branch</dd>
+            <dt>Esc</dt><dd>Stop editing · Esc again: deselect</dd>
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
             <dt>⌘↑ / ⌘↓</dt><dd>Collapse / expand</dd>
             <dt>⌫</dt><dd>Delete with children</dd>

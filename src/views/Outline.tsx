@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useEditor } from '../model/store';
 import { indexTree } from '../model/tree';
 import { scopeTester } from '../model/scope';
@@ -14,9 +14,47 @@ export function Outline() {
   const index = useMemo(() => indexTree(doc), [doc]);
   const attrNames = useMemo(() => new Map(doc.attributes.map((a) => [a.id, a])), [doc.attributes]);
   const applies = useMemo(() => scopeTester(doc), [doc]);
+  const olRef = useRef<HTMLDivElement>(null);
+  const nav = focusArea === 'outlineNav';
+
+  // Navigation mode: keep the selected row in view as you move with the arrows.
+  useEffect(() => {
+    if (nav) olRef.current?.querySelector('.ol-row.sel')?.scrollIntoView({ block: 'nearest' });
+  }, [nav, selectedId]);
+
+  /** Keys while a row is selected but not being edited (after Esc). */
+  const onNavKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget || !nav) return;
+    const s = useEditor.getState();
+    const { visible, parent } = indexTree(s.doc);
+    const id = s.selectedId;
+    const n = s.doc.nodes[id];
+    let handled = true;
+    if (!n) {
+      if (/^(Arrow|Enter| |F2)/.test(e.key)) s.select(s.doc.rootId, 'outlineNav');
+      else handled = false;
+    }
+    else if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
+    else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
+    else if ((e.key === 'Enter' && e.shiftKey) || e.key === 'F2' || e.key === ' ') s.setFocusArea('outline'); // edit this row
+    else if (e.key === 'Enter') { s.addSibling(id, true); s.setFocusArea('outline'); } // new item, typing
+    else if (e.key === 'Escape') s.select('', 'outlineNav');
+    else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
+    else if ((e.key === 'Backspace' || e.key === 'Delete') && parent.get(id)) s.remove(id);
+    else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
+    else if (e.altKey && e.key === 'ArrowDown') s.move(id, 1);
+    else if (isMod(e) && e.key === 'ArrowUp') s.toggle(id, true);
+    else if (isMod(e) && e.key === 'ArrowDown') s.toggle(id, false);
+    else if (e.key === 'ArrowUp') { const p = visible[visible.indexOf(id) - 1]; if (p) s.select(p, 'outlineNav'); }
+    else if (e.key === 'ArrowDown') { const x = visible[visible.indexOf(id) + 1]; if (x) s.select(x, 'outlineNav'); }
+    else if (e.key === 'ArrowLeft') { if (n.children.length && !n.collapsed) s.toggle(id, true); else if (parent.get(id)) s.select(parent.get(id)!, 'outlineNav'); }
+    else if (e.key === 'ArrowRight') { if (n.collapsed) s.toggle(id, false); else if (n.children[0]) s.select(n.children[0], 'outlineNav'); }
+    else handled = false;
+    if (handled) e.preventDefault();
+  };
 
   return (
-    <div className="ol" role="tree">
+    <div className={`ol${nav ? ' nav' : ''}`} role="tree" ref={olRef} tabIndex={-1} onKeyDown={onNavKey}>
       {index.visible.map((id) => (
         <Row
           key={id}
@@ -65,6 +103,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
 
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
+    else if (e.key === 'Escape') { s.setFocusArea('outlineNav'); (e.currentTarget.closest('.ol') as HTMLElement | null)?.focus(); } // stop editing, keep the row selected
     else if (e.key === 'Enter' && !e.shiftKey) s.addSibling(id, true); // Shift+Enter = line break
     else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
     else if (e.key === 'Backspace' && isMod(e) && e.shiftKey && parent) s.remove(id);
@@ -87,7 +126,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
   const hasKids = node.children.length > 0;
 
   return (
-    <div className={`ol-row${selected ? ' sel' : ''}${depth === 0 ? ' root' : ''}`} style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }} role="treeitem" aria-expanded={hasKids ? !node.collapsed : undefined}>
+    <div className={`ol-row${selected ? ' sel' : ''}${focused ? ' editing' : ''}${depth === 0 ? ' root' : ''}`} style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }} role="treeitem" aria-expanded={hasKids ? !node.collapsed : undefined}>
       {depth > 0 && (
         <button
           className={`ol-caret${hasKids ? '' : ' leaf'}`}

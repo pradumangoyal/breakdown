@@ -8,7 +8,7 @@ html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); }
 button { font: inherit; cursor: pointer; }
 
-.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
 .topbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .topbar h1 { font-size: 15px; margin: 0 8px 0 0; }
 .topbar select, .topbar button, .topbar label.btn { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; padding: 4px 9px; font-size: 13px; color: var(--ink); }
@@ -38,6 +38,11 @@ button { font: inherit; cursor: pointer; }
 .ol { overflow: auto; background: var(--panel); padding: 8px 0 80px; }
 .ol-row { display: flex; align-items: flex-start; gap: 4px; padding: 2px 8px 2px 0; min-height: 28px; border-left: 3px solid transparent; }
 .ol-row.sel { background: var(--accent-soft); border-left-color: var(--accent); }
+.ol:focus { outline: none; }
+/* Editing a row: it becomes an obvious text box with a cursor. Selected but not editing: highlight only. */
+.ol-row.editing .ol-input { background: #fff; box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 4px; padding: 3px 6px; caret-color: var(--accent); }
+.ol.nav .ol-row.sel { background: #dce7fc; }
+.ol.nav .ol-row.sel .ol-input { cursor: default; }
 .ol-row.root { min-height: 38px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .ol-row.root .ol-input { font-size: 16px; font-weight: 650; }
 .ol-caret { width: 18px; height: 18px; margin-top: 3px; flex: none; border: 0; background: none; padding: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
@@ -61,6 +66,10 @@ button { font: inherit; cursor: pointer; }
 .mm-node { transition: opacity .15s; }
 .mm-node.dim { opacity: .42; }
 .mm-node.d0.sel { box-shadow: 0 0 0 3px rgba(47, 111, 223, .55); }
+/* Editing on the map: white text box, solid outline, a label above. Selected only: the soft ring. */
+.mm-node.editing { background: #fff; color: var(--ink); outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 7px rgba(47, 111, 223, .16); cursor: text; z-index: 4; }
+.mm-node.editing::before { content: '✎ Editing'; position: absolute; left: -2px; top: -22px; font-size: 10px; font-weight: 700; letter-spacing: .03em; color: #fff; background: var(--accent); padding: 1px 6px; border-radius: 4px; }
+.mm-node.editing .mm-input { caret-color: var(--accent); }
 .mm-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .mm-empty { color: #98a2b3; font-style: italic; }
 .mm-input { font: inherit; line-height: inherit; color: inherit; background: transparent; border: 0; outline: none; padding: 0; max-width: 240px; resize: none; overflow: hidden; display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -168,3 +177,11 @@ table.grid .k-na { background: #f2f2f4; }
 .tv td.na { background: repeating-linear-gradient(135deg, #f4f5f7, #f4f5f7 6px, #eceef1 6px, #eceef1 7px); }
 .tv-empty { padding: 32px; text-align: center; color: var(--muted); }
 .tv-empty button { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 5px 12px; }
+
+/* Status bar: always says whether you are editing or just selecting, and which keys work now. */
+.statusbar { display: flex; align-items: center; gap: 14px; padding: 4px 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--muted); min-height: 28px; overflow: hidden; }
+.statusbar-mode { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.statusbar.is-editing { background: var(--accent-soft); }
+.statusbar.is-editing .statusbar-mode { color: var(--accent); }
+.statusbar-keys { display: flex; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+.statusbar kbd { font: inherit; font-size: 11px; white-space: nowrap; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel); color: #344054; }

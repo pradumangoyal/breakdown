@@ -171,3 +171,50 @@ export function blankDoc(title = 'New breakdown'): MapDoc {
     updatedAt: new Date().toISOString(),
   };
 }
+
+/** Children shown on screen (none while collapsed). */
+const shownKids = (doc: MapDoc, id: string) => (doc.nodes[id].collapsed ? [] : doc.nodes[id].children);
+
+/**
+ * ↓ on the map: the next logical node below, staying at the same level where possible.
+ * Next sibling if there is one; otherwise the next branch's first node at this level,
+ * or that branch's own node if it has nothing at this level. Null at the very bottom.
+ */
+export function nextLogical(doc: MapDoc, id: string): string | null {
+  const { parent, depth } = indexTree(doc);
+  const d = depth.get(id) ?? 0;
+  let cur = id;
+  let next: string | null = null;
+  while (!next) {
+    const p = parent.get(cur);
+    if (!p) return null;
+    const sib = doc.nodes[p].children;
+    const i = sib.indexOf(cur);
+    if (i < sib.length - 1) next = sib[i + 1];
+    else cur = p;
+  }
+  while ((depth.get(next) ?? 0) < d && shownKids(doc, next).length) next = shownKids(doc, next)[0];
+  return next;
+}
+
+/** ↑ on the map: mirror of `nextLogical`; at the top of a chain it goes to the parent. */
+export function prevLogical(doc: MapDoc, id: string): string | null {
+  const { parent, depth } = indexTree(doc);
+  const d = depth.get(id) ?? 0;
+  let cur = id;
+  let prev: string | null = null;
+  while (!prev) {
+    const p = parent.get(cur);
+    if (!p) return parent.get(id) ?? null;
+    const sib = doc.nodes[p].children;
+    const i = sib.indexOf(cur);
+    if (i > 0) prev = sib[i - 1];
+    else if (p === doc.rootId) return parent.get(id) ?? null; // nothing above at all
+    else cur = p;
+  }
+  while ((depth.get(prev) ?? 0) < d && shownKids(doc, prev).length) {
+    const k = shownKids(doc, prev);
+    prev = k[k.length - 1];
+  }
+  return prev;
+}

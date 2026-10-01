@@ -9,7 +9,8 @@ import * as T from './tree';
  * edits on the same node are merged into one undo step.
  */
 
-export type FocusArea = 'outline' | 'map' | 'table';
+/** 'outline' = typing in an outline row; 'outlineNav' = outline row selected, not editing (after Esc). */
+export type FocusArea = 'outline' | 'outlineNav' | 'map' | 'table';
 
 interface EditorState {
   doc: MapDoc;

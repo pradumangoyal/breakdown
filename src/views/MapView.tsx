@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3-zoom';
 import { useEditor } from '../model/store';
-import { countDescendants } from '../model/tree';
+import { countDescendants, nextLogical, prevLogical } from '../model/tree';
 import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
@@ -67,8 +67,6 @@ export function MapView() {
   const selectedId = useEditor((s) => s.selectedId);
   const editingId = useEditor((s) => s.editingId);
   const [sizes, setSizes] = useState(() => new Map<string, Size>());
-  /** First keystroke when typing over a selected node, tied to that node. */
-  const [seed, setSeed] = useState<{ id: string; text: string } | null>(null);
   /** Node created by Tab / Shift+Enter that is being written now: Enter moves on to a new sibling, empty = discard. */
   const freshRef = useRef<string | null>(null);
   const [connector, setConnector] = usePref<Connector>('mindmap.connector', 'elbow', ['elbow', 'curved', 'straight']);
@@ -206,7 +204,6 @@ export function MapView() {
 
   const startNew = useCallback((id: string) => {
     freshRef.current = id;
-    setSeed(null);
     useEditor.getState().setEditing(id);
   }, []);
 
@@ -215,7 +212,6 @@ export function MapView() {
     const s = useEditor.getState();
     const isFresh = freshRef.current === id;
     if (s.doc.nodes[id] && value !== s.doc.nodes[id].text) s.setText(id, value);
-    setSeed(null);
     freshRef.current = null;
     if (isFresh && value.trim() === '') s.discardNew(id); // nothing written: no stray "Untitled"
     else if (how === 'tab') return startNew(s.addChild(id));
@@ -235,20 +231,14 @@ export function MapView() {
       return;
     }
     const parent = findParent(s.doc.nodes, id);
-    const go = (target?: string) => { if (target) s.select(target, 'map'); };
-    // ↑/↓ follow the column: the next visible node of the same level, crossing into the next parent.
-    const sameLevel = (dir: 1 | -1) => {
-      const d = layout.depth.get(id);
-      const column = [...layout.boxes.keys()].filter((k) => layout.depth.get(k) === d); // depth-first = top to bottom
-      return column[column.indexOf(id) + dir];
-    };
+    const go = (target?: string | null) => { if (target) s.select(target, 'map'); };
     let handled = true;
 
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
     else if (e.key === 'Tab' && !e.shiftKey) startNew(s.addChild(id));
     else if (e.key === 'Enter' && !e.shiftKey) startNew(s.addSibling(id)); // same as the outline: Enter = new item
-    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; setSeed(null); s.setEditing(id); } // Shift+Enter edits
+    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; s.setEditing(id); } // Shift+Enter edits
     else if (e.key === 'Escape') s.select('', 'map'); // deselect: also clears the path highlight
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent) s.remove(id);
     else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
@@ -257,9 +247,8 @@ export function MapView() {
     else if (isMod(e) && e.key === 'ArrowDown') s.toggle(id, false);
     else if (e.key === 'ArrowLeft') go(parent ?? undefined);
     else if (e.key === 'ArrowRight') { if (n.collapsed) s.toggle(id, false); go(n.children[0]); }
-    else if (e.key === 'ArrowUp') go(sameLevel(-1));
-    else if (e.key === 'ArrowDown') go(sameLevel(1));
-    else if (e.key.length === 1 && !isMod(e) && !e.altKey) { freshRef.current = null; setSeed({ id, text: e.key }); s.setEditing(id); } // type to replace
+    else if (e.key === 'ArrowUp') go(prevLogical(s.doc, id)); // next logical node: sibling, else next branch at this level, else that branch
+    else if (e.key === 'ArrowDown') go(nextLogical(s.doc, id));
     else handled = false;
     if (handled) e.preventDefault();
   };
@@ -317,7 +306,6 @@ export function MapView() {
             selected={id === selectedId}
             dim={!!focus && !focus.path.has(id) && !focus.below.has(id)}
             editing={id === editingId}
-            seed={id === editingId && seed?.id === id ? seed.text : null}
             attrNames={attrNames}
             shown={shownAttrs(doc.nodes[id])}
             showValues={values === 'shown'}
@@ -370,7 +358,6 @@ interface MapNodeProps {
   selected: boolean;
   dim: boolean;
   editing: boolean;
-  seed: string | null;
   attrNames: Map<string, AttrDef>;
   shown: string;
   showValues: boolean;
@@ -378,10 +365,10 @@ interface MapNodeProps {
   finish: (id: string, value: string, how: EditEnd) => void;
 }
 
-const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, seed, attrNames, shown, showValues, register, finish }: MapNodeProps) {
+const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, attrNames, shown, showValues, register, finish }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
   const chips = shown ? shown.split(',').map((k) => [k, node.attrs[k]] as const) : [];
-  const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${dim ? ' dim' : ''}`;
+  const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${editing ? ' editing' : ''}${dim ? ' dim' : ''}`;
   const summary = chips.map(([k, v]) => `${attrNames.get(k)!.name}: ${String(v)}`);
 
   return (
@@ -398,7 +385,7 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
       onDoubleClick={() => useEditor.getState().setEditing(node.id)}
     >
       <div className="mm-row">
-        {editing ? <InlineEdit node={node} seed={seed} finish={finish} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
+        {editing ? <InlineEdit node={node} finish={finish} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
         {!showValues && chips.length > 0 && <span className="mm-badge" title={summary.join('\n')}>{chips.length}</span>}
       </div>
       {/* Values live inside the node, so the layout makes room and nothing is ever covered. */}
@@ -423,8 +410,8 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
 
 type EditEnd = 'enter' | 'tab' | 'escape' | 'blur';
 
-function InlineEdit({ node, seed, finish }: { node: Node; seed: string | null; finish: (id: string, value: string, how: EditEnd) => void }) {
-  const [value, setValue] = useState(seed ?? node.text);
+function InlineEdit({ node, finish }: { node: Node; finish: (id: string, value: string, how: EditEnd) => void }) {
+  const [value, setValue] = useState(node.text);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const done = useRef(false);
 
@@ -432,7 +419,7 @@ function InlineEdit({ node, seed, finish }: { node: Node; seed: string | null; f
     const el = inputRef.current!;
     el.focus({ preventScroll: true });
     el.setSelectionRange(el.value.length, el.value.length); // cursor at the end: you're editing, not replacing
-  }, [seed]);
+  }, []);
 
   const end = (how: EditEnd) => {
     if (done.current) return;
