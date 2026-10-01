@@ -35,6 +35,8 @@ interface EditorActions {
   outdent(id: string): void;
   move(id: string, delta: -1 | 1): void;
   remove(id: string): void;
+  /** Drops a node that was just created and left empty, undoing its creation (no extra undo step). */
+  discardNew(id: string): void;
   setText(id: string, text: string): void;
   toggle(id: string, collapsed?: boolean): void;
   setAttr(id: string, attrId: string, value: AttrValue | undefined): void;
@@ -49,6 +51,8 @@ interface EditorActions {
 const HISTORY = 200;
 const COALESCE_MS = 1200;
 let lastEdit: { key: string; at: number } | null = null;
+/** The first text typed into a just-created node joins the creation's undo step (no empty node left behind on undo). */
+const mergeNextText = (id: string) => { lastEdit = { key: `text:${id}`, at: Number.POSITIVE_INFINITY }; };
 
 export const useEditor = create<EditorState & EditorActions>()((set, get) => {
   /** Runs a recipe on a draft; records history unless merged into the previous text edit. */
@@ -60,7 +64,7 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
     });
     if (next === doc) return;
     const now = Date.now();
-    const merge = coalesceKey && lastEdit?.key === coalesceKey && now - lastEdit.at < COALESCE_MS;
+    const merge = coalesceKey && lastEdit?.key === coalesceKey && (lastEdit.at === Number.POSITIVE_INFINITY || now - lastEdit.at < COALESCE_MS);
     lastEdit = coalesceKey ? { key: coalesceKey, at: now } : null;
     set({ doc: next, past: merge ? past : [...past.slice(-HISTORY + 1), doc], future: [] });
   };
@@ -99,6 +103,7 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
     addChild: (id) => {
       let created = '';
       apply((d) => { created = T.addChild(d, id); });
+      mergeNextText(created);
       set({ selectedId: created });
       return created;
     },
@@ -108,6 +113,7 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
         const n = d.nodes[id];
         created = outliner && n.children.length && !n.collapsed ? T.addChild(d, id, 0) : T.addSiblingAfter(d, id);
       });
+      mergeNextText(created);
       set({ selectedId: created });
       return created;
     },
@@ -118,6 +124,23 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
       let next: string | null = null;
       apply((d) => { next = T.remove(d, id); });
       if (next) set({ selectedId: next, editingId: null });
+    },
+    discardNew: (id) => {
+      const { doc, past } = get();
+      const n = doc.nodes[id];
+      if (!n || n.text.trim() || n.children.length) return;
+      const { visible } = T.indexTree(doc);
+      const next = visible[visible.indexOf(id) - 1] ?? doc.rootId;
+      const prev = past[past.length - 1];
+      lastEdit = null;
+      // Created in the very last step: step back instead of recording a delete.
+      const selected = get().selectedId;
+      const keep = selected !== id && prev?.nodes[selected] ? selected : null;
+      if (prev && !prev.nodes[id]) set({ doc: prev, past: past.slice(0, -1), selectedId: keep ?? (prev.nodes[next] ? next : prev.rootId), editingId: null });
+      else {
+        get().remove(id);
+        if (keep) set({ selectedId: keep });
+      }
     },
     setText: (id, text) => apply((d) => T.setText(d, id, text), `text:${id}`),
     toggle: (id, collapsed) => apply((d) => T.setCollapsed(d, id, collapsed ?? !d.nodes[id].collapsed)),

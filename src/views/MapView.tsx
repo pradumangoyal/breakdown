@@ -69,8 +69,12 @@ export function MapView() {
   const [sizes, setSizes] = useState(() => new Map<string, Size>());
   /** First keystroke when typing over a selected node, tied to that node. */
   const [seed, setSeed] = useState<{ id: string; text: string } | null>(null);
+  /** Node created by Tab / Shift+Enter that is being written now: Enter moves on to a new sibling, empty = discard. */
+  const freshRef = useRef<string | null>(null);
   const [connector, setConnector] = usePref<Connector>('mindmap.connector', 'elbow', ['elbow', 'curved', 'straight']);
   const [arrange, setArrange] = usePref('mindmap.arrange', 'columns', ['columns', 'compact'] as const);
+  /** Attribute values inside the nodes (layout makes room) or just a count badge. */
+  const [values, setValues] = usePref('mindmap.values', 'shown', ['shown', 'count'] as const);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -142,6 +146,7 @@ export function MapView() {
         const t = e.transform;
         canvasRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
       });
+    z.clickDistance(4);
     sel.call(z).on('dblclick.zoom', null);
     zoomRef.current = z;
     const onWheel = (e: WheelEvent) => {
@@ -199,27 +204,52 @@ export function MapView() {
     if (dx || dy) zoomRef.current!.translateBy(select(vp), dx / t.k, dy / t.k);
   }, [selectedId, layout]);
 
-  const endEdit = useCallback(() => {
+  const startNew = useCallback((id: string) => {
+    freshRef.current = id;
     setSeed(null);
-    viewportRef.current?.focus({ preventScroll: true });
+    useEditor.getState().setEditing(id);
   }, []);
+
+  /** Ends an inline edit. `how` decides what happens next. */
+  const finish = useCallback((id: string, value: string, how: EditEnd) => {
+    const s = useEditor.getState();
+    const isFresh = freshRef.current === id;
+    if (s.doc.nodes[id] && value !== s.doc.nodes[id].text) s.setText(id, value);
+    setSeed(null);
+    freshRef.current = null;
+    if (isFresh && value.trim() === '') s.discardNew(id); // nothing written: no stray "Untitled"
+    else if (how === 'tab') return startNew(s.addChild(id));
+    else if (how === 'enter' && isFresh) return startNew(s.addSibling(id)); // keep writing siblings
+    s.setEditing(null);
+    if (how !== 'blur') viewportRef.current?.focus({ preventScroll: true });
+  }, [startNew]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (editingId) return;
     const s = useEditor.getState();
     const id = s.selectedId;
     const n = s.doc.nodes[id];
-    if (!n) return;
+    if (!n) {
+      // Nothing selected: any navigation key starts from the central node.
+      if (/^(Arrow|Enter|Tab| |F2)/.test(e.key)) { e.preventDefault(); s.select(s.doc.rootId, 'map'); }
+      return;
+    }
     const parent = findParent(s.doc.nodes, id);
-    const siblings = parent ? s.doc.nodes[parent].children : [id];
-    const i = siblings.indexOf(id);
     const go = (target?: string) => { if (target) s.select(target, 'map'); };
+    // ↑/↓ follow the column: the next visible node of the same level, crossing into the next parent.
+    const sameLevel = (dir: 1 | -1) => {
+      const d = layout.depth.get(id);
+      const column = [...layout.boxes.keys()].filter((k) => layout.depth.get(k) === d); // depth-first = top to bottom
+      return column[column.indexOf(id) + dir];
+    };
     let handled = true;
 
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
-    else if (e.key === 'Tab' && !e.shiftKey) { setSeed(null); s.setEditing(s.addChild(id)); }
-    else if (e.key === 'Enter') { setSeed(null); s.setEditing(s.addSibling(id)); }
+    else if (e.key === 'Tab' && !e.shiftKey) startNew(s.addChild(id));
+    else if (e.key === 'Enter' && e.shiftKey) startNew(s.addSibling(id));
+    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; setSeed(null); s.setEditing(id); }
+    else if (e.key === 'Escape') s.select('', 'map'); // deselect: also clears the path highlight
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent) s.remove(id);
     else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
     else if (e.altKey && e.key === 'ArrowDown') s.move(id, 1);
@@ -227,10 +257,9 @@ export function MapView() {
     else if (isMod(e) && e.key === 'ArrowDown') s.toggle(id, false);
     else if (e.key === 'ArrowLeft') go(parent ?? undefined);
     else if (e.key === 'ArrowRight') { if (n.collapsed) s.toggle(id, false); go(n.children[0]); }
-    else if (e.key === 'ArrowUp') go(siblings[i - 1]);
-    else if (e.key === 'ArrowDown') go(siblings[i + 1]);
-    else if (e.key === 'F2' || e.key === ' ') { setSeed(null); s.setEditing(id); }
-    else if (e.key.length === 1 && !isMod(e) && !e.altKey) { setSeed({ id, text: e.key }); s.setEditing(id); } // type to replace
+    else if (e.key === 'ArrowUp') go(sameLevel(-1));
+    else if (e.key === 'ArrowDown') go(sameLevel(1));
+    else if (e.key.length === 1 && !isMod(e) && !e.altKey) { freshRef.current = null; setSeed({ id, text: e.key }); s.setEditing(id); } // type to replace
     else handled = false;
     if (handled) e.preventDefault();
   };
@@ -247,6 +276,10 @@ export function MapView() {
       tabIndex={0}
       onKeyDown={onKeyDown}
       onFocus={() => useEditor.getState().setFocusArea('map')}
+      onClick={(e) => {
+        // A click on empty space (not a pan, not a node or the toolbar) clears the selection.
+        if (!(e.target as Element).closest('.mm-node, .mm-tools')) useEditor.getState().select('', 'map');
+      }}
     >
       <div className="mm-canvas" ref={canvasRef} style={{ width: layout.width, height: layout.height }}>
         <svg className="mm-edges" width={layout.width} height={layout.height}>
@@ -287,12 +320,14 @@ export function MapView() {
             seed={id === editingId && seed?.id === id ? seed.text : null}
             attrNames={attrNames}
             shown={shownAttrs(doc.nodes[id])}
+            showValues={values === 'shown'}
             register={register}
-            onDone={endEdit}
+            finish={finish}
           />
         ))}
       </div>
       <div className="mm-tools">
+        <button className={values === 'shown' ? 'on' : ''} aria-pressed={values === 'shown'} title="Show attribute values inside the nodes (off: just a count)" onClick={() => setValues(values === 'shown' ? 'count' : 'shown')}>Values</button>
         <button className={arrange === 'columns' ? 'on' : ''} aria-pressed={arrange === 'columns'} title="Line up each level in its own column, like the Sheet" onClick={() => setArrange(arrange === 'columns' ? 'compact' : 'columns')}>Columns</button>
         <select value={connector} onChange={(e) => setConnector(e.target.value as Connector)} title="Line style" aria-label="Line style">
           <option value="elbow">Elbow lines</option>
@@ -338,11 +373,12 @@ interface MapNodeProps {
   seed: string | null;
   attrNames: Map<string, AttrDef>;
   shown: string;
+  showValues: boolean;
   register: (id: string, el: HTMLDivElement | null) => void;
-  onDone: () => void;
+  finish: (id: string, value: string, how: EditEnd) => void;
 }
 
-const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, seed, attrNames, shown, register, onDone }: MapNodeProps) {
+const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, seed, attrNames, shown, showValues, register, finish }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
   const chips = shown ? shown.split(',').map((k) => [k, node.attrs[k]] as const) : [];
   const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${dim ? ' dim' : ''}`;
@@ -362,12 +398,12 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
       onDoubleClick={() => useEditor.getState().setEditing(node.id)}
     >
       <div className="mm-row">
-        {editing ? <InlineEdit node={node} seed={seed} onDone={onDone} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
-        {/* A count keeps every node the same size; full values float below the selected node. */}
-        {chips.length > 0 && <span className="mm-badge" title={summary.join('\n')}>{chips.length}</span>}
+        {editing ? <InlineEdit node={node} seed={seed} finish={finish} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
+        {!showValues && chips.length > 0 && <span className="mm-badge" title={summary.join('\n')}>{chips.length}</span>}
       </div>
-      {selected && chips.length > 0 && (
-        <div className="mm-pop">
+      {/* Values live inside the node, so the layout makes room and nothing is ever covered. */}
+      {showValues && chips.length > 0 && (
+        <div className="mm-chips">
           {summary.map((line) => <span key={line} className="chip">{line}</span>)}
         </div>
       )}
@@ -385,7 +421,9 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
   );
 });
 
-function InlineEdit({ node, seed, onDone }: { node: Node; seed: string | null; onDone: () => void }) {
+type EditEnd = 'enter' | 'tab' | 'escape' | 'blur';
+
+function InlineEdit({ node, seed, finish }: { node: Node; seed: string | null; finish: (id: string, value: string, how: EditEnd) => void }) {
   const [value, setValue] = useState(seed ?? node.text);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const done = useRef(false);
@@ -393,18 +431,13 @@ function InlineEdit({ node, seed, onDone }: { node: Node; seed: string | null; o
   useLayoutEffect(() => {
     const el = inputRef.current!;
     el.focus({ preventScroll: true });
-    if (seed === null) el.select();
-    else el.setSelectionRange(el.value.length, el.value.length);
+    el.setSelectionRange(el.value.length, el.value.length); // cursor at the end: you're editing, not replacing
   }, [seed]);
 
-  const commit = (after?: 'child' | 'sibling') => {
+  const end = (how: EditEnd) => {
     if (done.current) return;
     done.current = true;
-    const s = useEditor.getState();
-    if (value !== node.text) s.setText(node.id, value);
-    if (after === 'child') { s.setEditing(s.addChild(node.id)); return; }
-    s.setEditing(null);
-    onDone();
+    finish(node.id, value, how);
   };
 
   return (
@@ -414,13 +447,13 @@ function InlineEdit({ node, seed, onDone }: { node: Node; seed: string | null; o
       value={value}
       cols={Math.max(6, ...value.split('\n').map((l) => l.length + 1))}
       onChange={(e) => setValue(e.target.value)}
-      onBlur={() => commit()}
+      onBlur={() => end('blur')}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); } // Shift+Enter = line break
-        else if (e.key === 'Escape') { e.preventDefault(); setValue(node.text); done.current = true; useEditor.getState().setEditing(null); onDone(); }
-        else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); commit('child'); }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); end('enter'); } // Shift+Enter = line break
+        else if (e.key === 'Escape') { e.preventDefault(); end('escape'); }
+        else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); end('tab'); }
       }}
     />
   );

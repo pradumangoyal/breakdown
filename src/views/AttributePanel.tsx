@@ -14,14 +14,13 @@ export function AttributePanel() {
   const applies = useMemo(() => scopeTester(doc), [doc]);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
 
-  if (!node) return <aside className="ap" />;
   const s = useEditor.getState;
-  const depth = index.depth.get(node.id) ?? 0;
+  const depth = node ? index.depth.get(node.id) ?? 0 : 0;
   const isRoot = depth === 0;
-  const isEnd = !isRoot && node.children.length === 0;
+  const isEnd = !!node && !isRoot && node.children.length === 0;
   const maxDepth = Math.max(0, ...[...index.depth].filter(([id]) => doc.nodes[id].children.length === 0 && id !== doc.rootId).map(([, d]) => d));
-  const here = doc.attributes.filter((a) => applies(a, node.id));
-  const hidden = doc.attributes.filter((a) => !applies(a, node.id) && filled(node.attrs[a.id]));
+  const here = node ? doc.attributes.filter((a) => applies(a, node.id)) : [];
+  const hidden = node ? doc.attributes.filter((a) => !applies(a, node.id) && filled(node.attrs[a.id])) : [];
 
   const where = isRoot
     ? 'Central node: its values go on the line under the Sheet title.'
@@ -39,7 +38,13 @@ export function AttributePanel() {
 
   return (
     <aside className="ap">
-      <section>
+      {!node && (
+        <section>
+          <h3>This node</h3>
+          <p className="ap-hint">Nothing selected. Click a node (or press an arrow key on the map) to see and edit its values.</p>
+        </section>
+      )}
+      {node && <section>
         <h3>This node</h3>
         <p className="ap-node">{node.text.split('\n')[0] || 'Untitled'}</p>
         <p className="ap-hint">{where}</p>
@@ -66,7 +71,7 @@ export function AttributePanel() {
             ))}
           </div>
         )}
-      </section>
+      </section>}
 
       <section>
         <h3>Attributes in this map</h3>
