@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { buildDoc } from '../src/model/build';
 import { treeToGrid, type Grid } from '../src/export/grid';
 import { gridToWorkbook } from '../src/export/xlsx';
-import { problemTree, randomTree, wbs } from '../poc/01-sheet-layout/samples';
+import { problemTree, randomTree, wbs } from '../src/samples';
 
 /** Text picture of a grid: ┃ = merged down, ═ = merged across, · = empty. */
 function picture(grid: Grid): string[][] {

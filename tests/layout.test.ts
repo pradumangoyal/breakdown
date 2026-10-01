@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { produce } from 'immer';
 import { layoutMap } from '../src/views/layout';
-import { problemTree, randomTree } from '../poc/01-sheet-layout/samples';
+import { problemTree, randomTree } from '../src/samples';
 
 // Deterministic fake sizes: width from text, taller when a node has attributes.
 const sizeOf = (doc: ReturnType<typeof randomTree>) => (id: string) => ({

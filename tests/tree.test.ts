@@ -6,7 +6,7 @@ import {
   addAttribute, addChild, addSiblingAfter, countDescendants, indent, indexTree,
   dropPosition, moveAmongSiblings, moveNode, outdent, remove, setAttr, setCollapsed,
 } from '../src/model/tree';
-import { randomTree } from '../poc/01-sheet-layout/samples';
+import { randomTree } from '../src/samples';
 
 /** Outline as indented text, e.g. "R\n  A\n    x". */
 const outline = (doc: MapDoc) => {

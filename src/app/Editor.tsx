@@ -1,41 +1,22 @@
 import { Profiler, useEffect, useRef, useState, type ProfilerOnRenderCallback } from 'react';
-import { loadSaved, useEditor } from '../../src/model/store';
-import { useUi, type MainView } from '../../src/model/ui';
-import { blankDoc } from '../../src/model/tree';
-import type { MapDoc } from '../../src/model/types';
-import { treeToGrid } from '../../src/export/grid';
-import { gridToWorkbook } from '../../src/export/xlsx';
-import { Outline } from '../../src/views/Outline';
-import { MapView } from '../../src/views/MapView';
-import { AttributePanel } from '../../src/views/AttributePanel';
-import { SheetPreview } from '../../src/views/SheetPreview';
-import { TableView } from '../../src/views/TableView';
-import { StatusBar } from '../../src/views/StatusBar';
-import { problemTree, randomTree, wbs } from '../01-sheet-layout/samples';
-import '../../src/views/editor.css';
+import { flushSave, useEditor, useSaveStatus } from '../model/store';
+import { useUi, type MainView } from '../model/ui';
+import { deleteMap, duplicateMap, loadMap, setLastOpened } from '../storage/maps';
+import { Outline } from '../views/Outline';
+import { MapView } from '../views/MapView';
+import { AttributePanel } from '../views/AttributePanel';
+import { SheetPreview } from '../views/SheetPreview';
+import { TableView } from '../views/TableView';
+import { StatusBar } from '../views/StatusBar';
+import { downloadJson, downloadXlsx } from './files';
 
-const SAMPLES: Record<string, { label: string; make: () => MapDoc }> = {
-  problem: { label: 'Problem tree (7 nodes)', make: problemTree },
-  wbs: { label: 'Work breakdown (38 nodes)', make: wbs },
-  r150: { label: 'Random, 150 nodes, depth 6', make: () => randomTree(150, 6, 5) },
-  r1000: { label: 'Random, 1,000 nodes, depth 10', make: () => randomTree(1000, 10, 7) },
-  blank: { label: 'Blank map', make: () => blankDoc('What are you breaking down?') },
-};
-
-function downloadBlob(data: BlobPart, type: string, name: string) {
-  const url = URL.createObjectURL(new Blob([data], { type }));
-  Object.assign(document.createElement('a'), { href: url, download: name }).click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 // Dev-only render timing per pane, readable from devtools as window.__prof.
 const prof: ProfilerOnRenderCallback = (id, phase, actual) => {
   const w = window as unknown as { __prof?: Array<[string, string, number]> };
   (w.__prof ??= []).push([id, phase, Math.round(actual * 10) / 10]);
   if (w.__prof.length > 500) w.__prof.shift();
 };
-if (import.meta.env.DEV) Object.assign(window, { __editor: useEditor, __ui: useUi });
 
-const fileName = (doc: MapDoc) => (doc.nodes[doc.rootId].text.trim() || 'breakdown').replace(/[^\w\- ]+/g, '').slice(0, 60);
 const typingInField = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('input, textarea, select, [contenteditable="true"]');
 
 const VIEWS: Array<{ key: MainView; label: string }> = [
@@ -44,16 +25,25 @@ const VIEWS: Array<{ key: MainView; label: string }> = [
   { key: 'sheet', label: 'Sheet' },
 ];
 
-export function App() {
+/** The editor for one map from the library. */
+export function Editor({ mapId, goHome, open }: { mapId: string; goHome: () => void; open: (id: string) => void }) {
   const doc = useEditor((s) => s.doc);
+  const saveError = useSaveStatus((s) => s.error);
+  const [missing, setMissing] = useState(false);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const { view, outlineOpen, attrsOpen, focus, helpOpen } = useUi();
   const ui = useUi.getState;
 
   useEffect(() => {
-    useEditor.getState().load(loadSaved() ?? problemTree());
-  }, []);
+    flushSave();
+    const loaded = loadMap(mapId);
+    if (!loaded) { setMissing(true); return; }
+    setMissing(false);
+    useEditor.getState().load(loaded);
+    setLastOpened(mapId);
+    return () => flushSave(); // leaving the map: write any last edit right away
+  }, [mapId]);
 
   // Single-key shortcuts when you're not typing: O outline, A attributes, F focus mode, ? keys.
   // Esc with nothing selected leaves focus mode (map / outline handle Esc first: stop editing, deselect).
@@ -74,30 +64,29 @@ export function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, [ui]);
 
-  const replace = (next: MapDoc) => {
-    const edited = useEditor.getState().past.length > 0;
-    if (edited && !window.confirm('Replace the current map? It is only saved in this browser (use “Save .json” to keep a copy).')) return;
-    useEditor.getState().load(next);
+  const xlsx = () => { downloadXlsx(useEditor.getState().doc).catch((e) => window.alert(`Could not build the .xlsx: ${(e as Error).message}`)); };
+  const duplicate = () => { flushSave(); const copy = duplicateMap(mapId); if (copy) open(copy.id); };
+  const remove = () => {
+    if (!window.confirm('Delete this map? This can’t be undone (export it first to keep a copy).')) return;
+    deleteMap(mapId);
+    goHome();
   };
-  const saveJson = () => downloadBlob(JSON.stringify(doc, null, 2), 'application/json', `${fileName(doc)}.json`);
-  const openJson = async (file: File) => {
-    try {
-      const parsed = JSON.parse(await file.text()) as MapDoc;
-      if (parsed.version !== 1 || !parsed.nodes?.[parsed.rootId]) throw new Error('Not a mind-map file');
-      replace(parsed);
-    } catch (e) {
-      window.alert(`Could not open that file: ${(e as Error).message}`);
-    }
-  };
-  const downloadXlsx = async () => {
-    const buf = await gridToWorkbook(treeToGrid(doc)).xlsx.writeBuffer();
-    downloadBlob(buf, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `${fileName(doc)}.xlsx`);
-  };
+
+  if (missing) {
+    return (
+      <div className="home"><div className="home-empty">
+        <p>This map isn’t saved in this browser.</p>
+        <p className="ap-hint">Maps live only in the browser where you made them. Export it there and import it here.</p>
+        <button className="primary" onClick={goHome}>Go to My maps</button>
+      </div></div>
+    );
+  }
+  if (doc.id !== mapId) return null; // still loading
 
   const main =
     view === 'map' ? <Profiler id="map" onRender={prof}><MapView /></Profiler>
     : view === 'table' ? <Profiler id="table" onRender={prof}><TableView onAddAttribute={() => useUi.setState({ attrsOpen: true })} /></Profiler>
-    : <Profiler id="sheet" onRender={prof}><SheetPreview onDownload={downloadXlsx} /></Profiler>;
+    : <Profiler id="sheet" onRender={prof}><SheetPreview onDownload={xlsx} /></Profiler>;
 
   const showOutline = outlineOpen && !focus;
   const showAttrs = attrsOpen && !focus;
@@ -106,11 +95,11 @@ export function App() {
     <div className={`app${focus ? ' focus' : ''}`}>
       {!focus && (
         <header className="topbar">
-          <h1>Mind map</h1>
-          <FileMenu samples={SAMPLES} onSample={(k) => replace(SAMPLES[k].make())} onSave={saveJson} onOpen={openJson} onXlsx={downloadXlsx} />
+          <button className="back" onClick={goHome} title="All your maps">← My maps</button>
+          <FileMenu onExport={() => downloadJson(useEditor.getState().doc)} onXlsx={xlsx} onDuplicate={duplicate} onDelete={remove} />
           <button className="icon" disabled={!canUndo} onClick={() => useEditor.getState().undo()} title="Undo (⌘Z)" aria-label="Undo">↶</button>
           <button className="icon" disabled={!canRedo} onClick={() => useEditor.getState().redo()} title="Redo (⇧⌘Z)" aria-label="Redo">↷</button>
-          <span className="stat">{Object.keys(doc.nodes).length} nodes · autosaved</span>
+          <span className={`stat${saveError ? ' err' : ''}`} title={saveError ?? 'Saved in this browser'}>{saveError ? `⚠ ${saveError}` : `${Object.keys(doc.nodes).length} nodes · saved`}</span>
           <span className="spacer" />
           <span className="seg" role="group" aria-label="View">
             {VIEWS.map((v) => (
@@ -135,16 +124,9 @@ export function App() {
   );
 }
 
-function FileMenu({ samples, onSample, onSave, onOpen, onXlsx }: {
-  samples: Record<string, { label: string }>;
-  onSample: (key: string) => void;
-  onSave: () => void;
-  onOpen: (f: File) => void;
-  onXlsx: () => void;
-}) {
+function FileMenu({ onExport, onXlsx, onDuplicate, onDelete }: { onExport: () => void; onXlsx: () => void; onDuplicate: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const file = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
@@ -157,14 +139,12 @@ function FileMenu({ samples, onSample, onSave, onOpen, onXlsx }: {
       <button className={open ? 'on' : ''} aria-expanded={open} onClick={() => setOpen((v) => !v)}>File ▾</button>
       {open && (
         <div className="menu-list" role="menu">
-          <button role="menuitem" onClick={pick(onSave)}>Save as .json</button>
-          <button role="menuitem" onClick={pick(() => file.current?.click())}>Open .json…</button>
+          <button role="menuitem" onClick={pick(onExport)}>Export as .json (backup / share)</button>
           <button role="menuitem" onClick={pick(onXlsx)}>Download Sheet as .xlsx</button>
-          <div className="menu-sep">Load a sample</div>
-          {Object.entries(samples).map(([k, s]) => <button key={k} role="menuitem" onClick={pick(() => onSample(k))}>{s.label}</button>)}
+          <button role="menuitem" onClick={pick(onDuplicate)}>Duplicate this map</button>
+          <button role="menuitem" className="danger" onClick={pick(onDelete)}>Delete this map…</button>
         </div>
       )}
-      <input ref={file} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onOpen(f); e.target.value = ''; }} />
     </div>
   );
 }

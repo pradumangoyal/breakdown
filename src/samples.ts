@@ -1,5 +1,5 @@
-import { buildDoc, type NodeSpec } from '../../src/model/build';
-import type { MapDoc } from '../../src/model/types';
+import { buildDoc, type NodeSpec } from './model/build';
+import type { MapDoc } from './model/types';
 
 /** 1. The problem tree from the plan (non-task breakdown, uneven depth, one mid-node attribute). */
 export function problemTree(): MapDoc {

@@ -1,0 +1,42 @@
+/* My maps */
+.home { max-width: 880px; margin: 0 auto; padding: 32px 20px 48px; min-height: 100%; }
+.home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.home-head h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.home-head p { margin: 4px 0 0; color: var(--muted); }
+.home-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.home button { font: inherit; font-size: 13px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 6px 12px; }
+.home button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.home button.danger { color: #b42318; }
+.home-error { background: #fef3f2; border: 1px solid #fecdca; color: #b42318; border-radius: 8px; padding: 8px 12px; }
+.home-continue { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 14px 16px !important; margin-bottom: 20px; border-color: var(--accent) !important; background: var(--accent-soft) !important; border-radius: 10px !important; }
+.home-continue span { font-size: 12px; color: var(--accent); }
+.home-continue strong { font-size: 16px; }
+.home-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.home-bar h2 { font-size: 14px; margin: 0; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.home-bar h2 span { background: var(--chip); border-radius: 8px; padding: 0 6px; font-size: 12px; }
+.home-bar input { font: inherit; font-size: 13px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 5px 9px; width: 220px; max-width: 50%; }
+.home-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.home-list li { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 4px; border-top: 1px solid var(--line); }
+.home-list li:first-child { border-top: 0; }
+.home-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border: 0 !important; background: none !important; padding: 8px 10px !important; }
+.home-open strong { font-size: 15px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-open span { font-size: 12px; color: var(--muted); }
+.home-open:hover strong { color: var(--accent); }
+.home-row-actions { display: flex; gap: 4px; flex: none; opacity: .75; }
+.home-list li:hover .home-row-actions { opacity: 1; }
+.home-row-actions button { padding: 3px 8px !important; font-size: 12px !important; }
+.home-rename { flex: 1; display: flex; gap: 6px; padding: 6px; }
+.home-rename input { flex: 1; font: inherit; font-size: 14px; border: 1px solid var(--accent); border-radius: 6px; padding: 5px 8px; }
+.home-none { color: var(--muted); padding: 14px !important; }
+.home-empty { text-align: center; padding: 48px 16px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--panel); }
+.home-empty p { margin: 0 0 6px; }
+.home-foot { margin-top: 24px; font-size: 12px; color: var(--muted); text-align: center; }
+@media (max-width: 600px) {
+  .home-list li { flex-direction: column; align-items: stretch; }
+  .home-row-actions { padding: 0 10px 6px; }
+}
+
+/* Editor top bar additions */
+.topbar button.back { font-weight: 600; }
+.topbar .stat.err { color: #b42318; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-list button.danger { color: #b42318; }

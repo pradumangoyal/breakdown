@@ -1,17 +1,19 @@
-# POC-B setup: Google sign-in for one-click export (~10 min, one time)
+# Google sign-in for one-click export (experimental, ~10 min, one time)
 
-Do this signed in as your **newtonschool.co** account at https://console.cloud.google.com.
+Used by the experiment page `poc/02-google-export/`. The main app exports .xlsx today; one-click Google Sheets export is next.
 
-1. **Create a project.** Open the project picker at the top, choose **New project**, name it `mind-map-export`, and leave the organisation as newtonschool.co.
+Do this at https://console.cloud.google.com, signed in with the Google account the Sheets should go to.
+
+1. **Create a project.** Open the project picker at the top, choose **New project**, and name it `breakdown-export` (if you're on Google Workspace, keep your organisation).
 2. **Enable the Sheets API.** Go to **APIs & Services → Library**, search for **Google Sheets API**, and click **Enable**.
 3. **Set up the consent screen.** Go to **APIs & Services → OAuth consent screen** (the page may be titled "Google Auth Platform"), then **Get started**.
    - App name: `Mind map export`. Support email: your email.
-   - Audience: **Internal**. With Internal, only newtonschool.co accounts can sign in, and Google doesn't need to review the app.
+   - Audience: **Internal** on Google Workspace (only your organisation can sign in, no Google review needed), or **External** + add yourself as a test user on a personal Gmail account.
 4. **Create the client.** Go to **Clients → Create client**.
    - Type: **Web application**.
    - Authorized JavaScript origins: `http://localhost:5173`
    - Click **Create** and copy the **Client ID**, which ends in `.apps.googleusercontent.com`. The client ID isn't a secret. You won't need the client secret.
-5. Run `npm run dev`, open http://localhost:5173/poc/02-google-export/, paste the client ID, pick a sample, and click **Export to Google Sheets**.
+5. Run `npm run dev`, open http://localhost:5173/poc/02-google-export/, paste the client ID, pick a sample, and click **Export to Google Sheets**. (To use it from the hosted site too, add `https://<user>.github.io` as another authorized origin.)
 
 The app only asks for `drive.file`, which lets it see and edit only the files it creates itself. It can't read the rest of your Drive.
 

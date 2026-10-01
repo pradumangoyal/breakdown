@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { produce } from 'immer';
 import type { AttrDef, AttrScope, AttrValue, MapDoc } from './types';
 import * as T from './tree';
+import { StorageError, saveMap } from '../storage/maps';
 
 /**
  * One store feeds both views (outline + map), so they can never disagree.
@@ -165,22 +166,31 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
   };
 });
 
-/** Autosave to this browser. Wrapped in try/catch: storage can be unavailable (private mode). */
-const KEY = 'mindmap.doc.v1';
-export function loadSaved(): MapDoc | null {
+/**
+ * Autosave: every change to the open map is written to the map library shortly after it
+ * happens (see src/storage/maps.ts). Problems (storage full / blocked) show up in `saveError`.
+ */
+export const useSaveStatus = create<{ error: string | null; savedAt: number | null }>()(() => ({ error: null, savedAt: null }));
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let pending: MapDoc | null = null;
+export function flushSave() {
+  clearTimeout(saveTimer);
+  if (!pending) return;
+  const doc = pending;
+  pending = null;
   try {
-    const raw = localStorage.getItem(KEY);
-    const doc = raw ? (JSON.parse(raw) as MapDoc) : null;
-    return doc && doc.version === 1 && doc.nodes[doc.rootId] ? doc : null;
-  } catch {
-    return null;
+    saveMap(doc);
+    useSaveStatus.setState({ error: null, savedAt: Date.now() });
+  } catch (e) {
+    useSaveStatus.setState({ error: e instanceof StorageError ? e.message : 'Could not save this map in the browser.' });
   }
 }
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
 useEditor.subscribe((s, prev) => {
-  if (s.doc === prev.doc) return;
+  // `load` swaps in another map: that's not an edit, so nothing to save.
+  if (s.doc === prev.doc || s.doc.id !== prev.doc.id) return;
+  pending = s.doc;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(s.doc)); } catch { /* storage unavailable */ }
-  }, 400);
+  saveTimer = setTimeout(flushSave, 400);
 });
+if (typeof window !== 'undefined') window.addEventListener('beforeunload', flushSave);

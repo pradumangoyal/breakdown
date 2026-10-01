@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { treeToGrid } from '../src/export/grid';
 import { gridToSheets } from '../src/export/sheets';
-import { edgeCases, problemTree, randomTree } from '../poc/01-sheet-layout/samples';
+import { edgeCases, problemTree, randomTree } from '../src/samples';
 
 const sheetOf = (p: ReturnType<typeof gridToSheets>) => (p.create as any).sheets[0];
 

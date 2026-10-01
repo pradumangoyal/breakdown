@@ -1,7 +1,7 @@
 import { treeToGrid } from '../../src/export/grid';
 import { gridToHtml } from '../../src/export/html';
 import { gridToWorkbook } from '../../src/export/xlsx';
-import { samples } from './samples';
+import { samples } from '../../src/samples';
 
 const tabs = document.getElementById('tabs')!;
 const bar = document.getElementById('bar')!;

@@ -1,6 +1,6 @@
 import { treeToGrid } from '../../src/export/grid';
 import { gridToSheets } from '../../src/export/sheets';
-import { samples } from '../01-sheet-layout/samples';
+import { samples } from '../../src/samples';
 
 declare const google: any;
 
