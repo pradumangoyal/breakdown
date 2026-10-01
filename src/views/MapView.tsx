@@ -7,7 +7,7 @@ import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
 import { H_GAP, PAD, layoutMap, type Box, type Size } from './layout';
-import { AutoTextarea } from './AutoTextarea';
+import { AutoTextarea, insertLineBreak } from './AutoTextarea';
 
 const BRANCH_COLORS = ['#2f6fdf', '#d9480f', '#2b8a3e', '#9c36b5', '#c2255c', '#0c8599', '#e67700', '#5f3dc4'];
 const colorOf = (b: number) => (b < 0 ? '#495057' : BRANCH_COLORS[b % BRANCH_COLORS.length]);
@@ -304,8 +304,8 @@ export function MapView() {
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
     else if (e.key === 'Tab' && !e.shiftKey) startNew(s.addChild(id));
-    else if (e.key === 'Enter' && !e.shiftKey) startNew(s.addSibling(id)); // same as the outline: Enter = new item
-    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; s.setEditing(id); } // Shift+Enter edits
+    else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) startNew(s.addSibling(id)); // same as the outline: Enter = new item
+    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; s.setEditing(id); } // Shift+Enter / Ctrl+Enter edit
     else if (e.key === 'Escape') s.select('', 'map'); // deselect: also clears the path highlight
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent) s.remove(id);
     else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
@@ -523,7 +523,8 @@ function InlineEdit({ node, finish }: { node: Node; finish: (id: string, value: 
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); end('enter'); } // Shift+Enter = line break
+        if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); insertLineBreak(e.currentTarget); } // Ctrl+Enter = line break
+        else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); end('enter'); } // Shift+Enter = line break (textarea default)
         else if (e.key === 'Escape') { e.preventDefault(); end('escape'); }
         else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); end('tab'); }
       }}

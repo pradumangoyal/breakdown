@@ -3,7 +3,7 @@ import { useEditor } from '../model/store';
 import { dropPosition, indexTree, type DropZone } from '../model/tree';
 import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
-import { AutoTextarea, caretOnFirstLine, caretOnLastLine } from './AutoTextarea';
+import { AutoTextarea, caretOnFirstLine, caretOnLastLine, insertLineBreak } from './AutoTextarea';
 
 const isMod = (e: React.KeyboardEvent) => e.metaKey || e.ctrlKey;
 
@@ -56,7 +56,7 @@ export function Outline() {
     }
     else if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
-    else if ((e.key === 'Enter' && e.shiftKey) || e.key === 'F2' || e.key === ' ') s.setFocusArea('outline'); // edit this row
+    else if ((e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) || e.key === 'F2' || e.key === ' ') s.setFocusArea('outline'); // edit this row
     else if (e.key === 'Enter') { s.addSibling(id, true); s.setFocusArea('outline'); } // new item, typing
     else if (e.key === 'Escape') s.select('', 'outlineNav');
     else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
@@ -136,7 +136,8 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
     else if (e.key === 'Escape') { s.setFocusArea('outlineNav'); (e.currentTarget.closest('.ol') as HTMLElement | null)?.focus(); } // stop editing, keep the row selected
-    else if (e.key === 'Enter' && !e.shiftKey) s.addSibling(id, true); // Shift+Enter = line break
+    else if (e.key === 'Enter' && e.ctrlKey) insertLineBreak(e.currentTarget); // Ctrl+Enter = line break, like Shift+Enter
+    else if (e.key === 'Enter' && !e.shiftKey) s.addSibling(id, true); // Shift+Enter = line break (textarea default)
     else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
     else if (e.key === 'Backspace' && isMod(e) && e.shiftKey && parent) s.remove(id);
     else if (e.key === 'Backspace' && node.text === '' && !node.children.length && parent) s.remove(id);

@@ -158,9 +158,9 @@ function KeyHelp() {
           <dl>
             <dt>Enter</dt><dd>Add sibling below</dd>
             <dt>Tab</dt><dd>Add child</dd>
-            <dt>⇧Enter / F2 / Space</dt><dd>Edit the selected node</dd>
+            <dt>⇧Enter / ⌃Enter / F2 / Space</dt><dd>Edit the selected node</dd>
             <dt>While writing new</dt><dd>Enter → next sibling · empty Enter / Esc → stop</dd>
-            <dt>⇧Enter (editing)</dt><dd>Line break</dd>
+            <dt>⇧Enter / ⌃Enter (editing)</dt><dd>Line break</dd>
             <dt>← / →</dt><dd>Parent / first child</dd>
             <dt>↑ / ↓</dt><dd>Next logical node: sibling, else the next branch at this level, else that branch</dd>
             <dt>Drag a node</dt><dd>Onto a node: move under it · near its top / bottom edge: place above / below</dd>
@@ -174,7 +174,7 @@ function KeyHelp() {
           <h4>Outline (O)</h4>
           <dl>
             <dt>Enter</dt><dd>New item below (first child if expanded)</dd>
-            <dt>⇧Enter</dt><dd>Line break inside the item</dd>
+            <dt>⇧Enter / ⌃Enter</dt><dd>Line break inside the item</dd>
             <dt>Tab / ⇧Tab</dt><dd>Indent / outdent</dd>
             <dt>↑ / ↓</dt><dd>Previous / next item</dd>
             <dt>Drag the bullet</dt><dd>Move the item (onto a row: under it)</dd>

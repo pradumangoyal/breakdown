@@ -17,3 +17,14 @@ export const AutoTextarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttribut
 /** True when the caret is on the first (or last) line, so ↑/↓ should move between items instead of lines. */
 export const caretOnFirstLine = (el: HTMLTextAreaElement) => el.value.lastIndexOf('\n', el.selectionStart - 1) === -1;
 export const caretOnLastLine = (el: HTMLTextAreaElement) => el.value.indexOf('\n', el.selectionEnd) === -1;
+
+/**
+ * Inserts a line break at the cursor (used for Ctrl+Enter; Shift+Enter is the textarea's own default).
+ * execCommand keeps the text box's own undo and fires a normal input event, so React sees the change.
+ */
+export function insertLineBreak(el: HTMLTextAreaElement) {
+  if (!document.execCommand('insertText', false, '\n')) {
+    el.setRangeText('\n', el.selectionStart, el.selectionEnd, 'end');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}

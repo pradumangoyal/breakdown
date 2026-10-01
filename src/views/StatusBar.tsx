@@ -28,8 +28,8 @@ function useFocusKind() {
 }
 
 const HINTS: Record<Mode, string[]> = {
-  'map-edit': ['Enter finish', '⇧Enter new line', 'Tab add child', 'Esc stop editing'],
-  'outline-edit': ['Enter new item', '⇧Enter new line', 'Tab indent', 'Esc stop editing'],
+  'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', 'Esc stop editing'],
+  'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', 'Esc stop editing'],
   'table-edit': ['Tab next cell', 'Enter next row', 'Esc leave cell'],
   'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', '↑↓←→ move', 'Esc deselect'],
   'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', 'Esc deselect'],
