@@ -4,30 +4,38 @@ import { zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3-zoom';
 import { useEditor } from '../model/store';
 import { countDescendants } from '../model/tree';
 import type { AttrDef, Node } from '../model/types';
-import { layoutMap, type Box, type Size } from './layout';
+import { levelName } from '../export/grid';
+import { H_GAP, PAD, layoutMap, type Box, type Size } from './layout';
 
 const BRANCH_COLORS = ['#2f6fdf', '#d9480f', '#2b8a3e', '#9c36b5', '#c2255c', '#0c8599', '#e67700', '#5f3dc4'];
 const colorOf = (b: number) => (b < 0 ? '#495057' : BRANCH_COLORS[b % BRANCH_COLORS.length]);
-const MAX_CHIPS = 3;
 
 /** Size guess before a node has been measured (first frame only). */
 const estimate = (n: Node, depth: number): Size => ({
   w: Math.min(260, 22 + n.text.length * (depth === 0 ? 10 : 7.4)),
-  h: (depth === 0 ? 44 : 30) + (Object.keys(n.attrs).length ? 20 : 0),
+  h: depth === 0 ? 44 : 30,
 });
 
 const isMod = (e: React.KeyboardEvent | KeyboardEvent) => e.metaKey || e.ctrlKey;
 
 export type Connector = 'elbow' | 'curved' | 'straight';
-const CONNECTOR_KEY = 'mindmap.connector';
-const loadConnector = (): Connector => {
-  try {
-    const v = localStorage.getItem(CONNECTOR_KEY);
-    return v === 'curved' || v === 'straight' ? v : 'elbow';
-  } catch {
-    return 'elbow';
-  }
-};
+
+/** Per-viewer map preferences, remembered in this browser (falls back to defaults if storage is unavailable). */
+function usePref<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const v = localStorage.getItem(key) as T | null;
+      return v && allowed.includes(v) ? v : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+  const set = (v: T) => {
+    setValue(v);
+    try { localStorage.setItem(key, v); } catch { /* preference just won't persist */ }
+  };
+  return [value, set];
+}
 
 /**
  * Connector from a parent's right edge to a child's left edge, as [shared part, child part].
@@ -35,12 +43,16 @@ const loadConnector = (): Connector => {
  * parent's colour, so a spine shared by siblings of different branches stays one colour.
  */
 function edgePaths(style: Connector, x1: number, y1: number, x2: number, y2: number): [string, string] {
-  if (style === 'straight') return ['', `M${x1},${y1} L${x2},${y2}`];
-  const mx = x1 + (x2 - x1) / 2; // all children of a parent share this x, so elbows form one spine
-  if (style === 'curved') return ['', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`];
+  // The bend always happens in the last H_GAP before the child's column, so with level
+  // columns every spine of a level lines up; a wide gap after a short parent is a straight run.
+  const bx = x2 - H_GAP;
+  const mx = x2 - H_GAP / 2;
+  const run = bx > x1 + 0.5 ? `M${x1},${y1} H${bx} ` : `M${x1},${y1} `;
+  if (style === 'straight') return ['', `${run}L${x2},${y2}`];
+  if (style === 'curved') return ['', `${run}C${mx},${y1} ${mx},${y2} ${x2},${y2}`];
   const dy = y2 - y1;
   if (Math.abs(dy) < 1) return [`M${x1},${y1} H${mx}`, `M${mx},${y2} H${x2}`];
-  const r = Math.min(8, Math.abs(dy) / 2, (x2 - x1) / 2);
+  const r = Math.min(8, Math.abs(dy) / 2, H_GAP / 2);
   const s = Math.sign(dy);
   return [
     `M${x1},${y1} H${mx - r} Q${mx},${y1} ${mx},${y1 + s * r} V${y2 - s * r}`,
@@ -55,11 +67,8 @@ export function MapView() {
   const [sizes, setSizes] = useState(() => new Map<string, Size>());
   /** First keystroke when typing over a selected node, tied to that node. */
   const [seed, setSeed] = useState<{ id: string; text: string } | null>(null);
-  const [connector, setConnector] = useState<Connector>(loadConnector);
-  const changeConnector = (c: Connector) => {
-    setConnector(c);
-    try { localStorage.setItem(CONNECTOR_KEY, c); } catch { /* per-viewer preference only */ }
-  };
+  const [connector, setConnector] = usePref<Connector>('mindmap.connector', 'elbow', ['elbow', 'curved', 'straight']);
+  const [arrange, setArrange] = usePref('mindmap.arrange', 'columns', ['columns', 'compact'] as const);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -69,7 +78,7 @@ export function MapView() {
   const boxCache = useRef(new Map<string, Box>());
 
   const layout = useMemo(() => {
-    const l = layoutMap(doc, (id, d) => sizes.get(id) ?? estimate(doc.nodes[id], d));
+    const l = layoutMap(doc, (id, d) => sizes.get(id) ?? estimate(doc.nodes[id], d), { alignLevels: arrange === 'columns' });
     // Reuse unchanged box objects so memoised nodes that didn't move skip re-rendering.
     const stable = new Map<string, Box>();
     for (const [id, b] of l.boxes) {
@@ -79,7 +88,26 @@ export function MapView() {
     boxCache.current = stable;
     l.boxes = stable;
     return l;
-  }, [doc, sizes]);
+  }, [doc, sizes, arrange]);
+
+  /**
+   * Selected-path highlight: the chain from the centre to the selected node is bold,
+   * the selected node's own (visible) subtree stays normal, everything else dims.
+   * Nothing dims while the central node is selected.
+   */
+  const focus = useMemo(() => {
+    if (!layout.boxes.has(selectedId) || selectedId === doc.rootId) return null;
+    const path = new Set<string>();
+    for (let id: string | null = selectedId; id; id = layout.parent.get(id) ?? null) path.add(id);
+    const below = new Set<string>();
+    const walk = (id: string) => {
+      if (doc.nodes[id].collapsed) return;
+      for (const c of doc.nodes[id].children) { below.add(c); walk(c); }
+    };
+    walk(selectedId);
+    return { path, below };
+  }, [layout, selectedId, doc]);
+  const edgeMode = (to: string): EdgeMode => (!focus ? 'normal' : focus.path.has(to) ? 'path' : focus.below.has(to) ? 'normal' : 'dim');
 
   // Measure rendered nodes; re-layout only if something actually changed size.
   useLayoutEffect(() => {
@@ -217,7 +245,7 @@ export function MapView() {
     >
       <div className="mm-canvas" ref={canvasRef} style={{ width: layout.width, height: layout.height }}>
         <svg className="mm-edges" width={layout.width} height={layout.height}>
-          {layout.edges.map(({ from, to }) => {
+          {(focus ? [...layout.edges].sort((p, q) => EDGE_ORDER[edgeMode(p.to)] - EDGE_ORDER[edgeMode(q.to)]) : layout.edges).map(({ from, to }) => {
             const a = layout.boxes.get(from)!;
             const b = layout.boxes.get(to)!;
             return (
@@ -231,10 +259,15 @@ export function MapView() {
                 parentColor={colorOf(layout.branch.get(from)!)}
                 width={layout.depth.get(to) === 1 ? 2.2 : 1.5}
                 style={connector}
+                mode={edgeMode(to)}
               />
             );
           })}
         </svg>
+        {arrange === 'columns' &&
+          layout.columns.slice(1).map((x, i) => (
+            <div key={i} className="mm-col-label" style={{ left: x, top: PAD - 40 }}>{levelName(doc, i + 1)}</div>
+          ))}
         {[...layout.boxes].map(([id, box]) => (
           <MapNode
             key={id}
@@ -244,6 +277,7 @@ export function MapView() {
             color={colorOf(layout.branch.get(id)!)}
             hidden={doc.nodes[id].collapsed ? countDescendants(doc, id) : 0}
             selected={id === selectedId}
+            dim={!!focus && !focus.path.has(id) && !focus.below.has(id)}
             editing={id === editingId}
             seed={id === editingId && seed?.id === id ? seed.text : null}
             attrNames={attrNames}
@@ -253,7 +287,8 @@ export function MapView() {
         ))}
       </div>
       <div className="mm-tools">
-        <select value={connector} onChange={(e) => changeConnector(e.target.value as Connector)} title="Line style" aria-label="Line style">
+        <button className={arrange === 'columns' ? 'on' : ''} aria-pressed={arrange === 'columns'} title="Line up each level in its own column, like the Sheet" onClick={() => setArrange(arrange === 'columns' ? 'compact' : 'columns')}>Columns</button>
+        <select value={connector} onChange={(e) => setConnector(e.target.value as Connector)} title="Line style" aria-label="Line style">
           <option value="elbow">Elbow lines</option>
           <option value="curved">Curved lines</option>
           <option value="straight">Straight lines</option>
@@ -266,11 +301,14 @@ export function MapView() {
   );
 }
 
-interface EdgeProps { x1: number; y1: number; x2: number; y2: number; color: string; parentColor: string; width: number; style: Connector }
-const Edge = memo(function Edge({ x1, y1, x2, y2, color, parentColor, width, style }: EdgeProps) {
+type EdgeMode = 'path' | 'normal' | 'dim';
+const EDGE_ORDER: Record<EdgeMode, number> = { dim: 0, normal: 1, path: 2 };
+
+interface EdgeProps { x1: number; y1: number; x2: number; y2: number; color: string; parentColor: string; width: number; style: Connector; mode: EdgeMode }
+const Edge = memo(function Edge({ x1, y1, x2, y2, color, parentColor, width, style, mode }: EdgeProps) {
   const [shared, own] = edgePaths(style, x1, y1, x2, y2);
   return (
-    <g fill="none" strokeWidth={width} strokeLinejoin="round" strokeLinecap="round">
+    <g fill="none" strokeWidth={mode === 'path' ? width + 1.3 : width} opacity={mode === 'dim' ? 0.28 : 1} strokeLinejoin="round" strokeLinecap="round">
       {shared && <path d={shared} stroke={parentColor} />}
       <path d={own} stroke={color} />
     </g>
@@ -289,6 +327,7 @@ interface MapNodeProps {
   color: string;
   hidden: number;
   selected: boolean;
+  dim: boolean;
   editing: boolean;
   seed: string | null;
   attrNames: Map<string, AttrDef>;
@@ -296,10 +335,11 @@ interface MapNodeProps {
   onDone: () => void;
 }
 
-const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, editing, seed, attrNames, register, onDone }: MapNodeProps) {
+const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, seed, attrNames, register, onDone }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
   const chips = Object.entries(node.attrs).filter(([k, v]) => attrNames.has(k) && String(v).trim() !== '');
-  const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}`;
+  const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${dim ? ' dim' : ''}`;
+  const summary = chips.map(([k, v]) => `${attrNames.get(k)!.name}: ${String(v)}`);
 
   return (
     <div
@@ -314,13 +354,14 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
       }}
       onDoubleClick={() => useEditor.getState().setEditing(node.id)}
     >
-      {editing ? <InlineEdit node={node} seed={seed} onDone={onDone} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
-      {chips.length > 0 && (
-        <div className="mm-chips">
-          {chips.slice(0, MAX_CHIPS).map(([k, v]) => (
-            <span key={k} className="chip">{attrNames.get(k)!.name}: {String(v)}</span>
-          ))}
-          {chips.length > MAX_CHIPS && <span className="chip more">+{chips.length - MAX_CHIPS}</span>}
+      <div className="mm-row">
+        {editing ? <InlineEdit node={node} seed={seed} onDone={onDone} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
+        {/* A count keeps every node the same size; full values float below the selected node. */}
+        {chips.length > 0 && <span className="mm-badge" title={summary.join('\n')}>{chips.length}</span>}
+      </div>
+      {selected && chips.length > 0 && (
+        <div className="mm-pop">
+          {summary.map((line) => <span key={line} className="chip">{line}</span>)}
         </div>
       )}
       {node.children.length > 0 && depth > 0 && (
