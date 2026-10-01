@@ -1,6 +1,6 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useEditor } from '../model/store';
-import { indexTree } from '../model/tree';
+import { dropPosition, indexTree, type DropZone } from '../model/tree';
 import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { AutoTextarea, caretOnFirstLine, caretOnLastLine } from './AutoTextarea';
@@ -16,6 +16,26 @@ export function Outline() {
   const applies = useMemo(() => scopeTester(doc), [doc]);
   const olRef = useRef<HTMLDivElement>(null);
   const nav = focusArea === 'outlineNav';
+  // Drag and drop (rows are dragged by their bullet).
+  const [dnd, setDndState] = useState<{ id: string; target: { id: string; zone: DropZone } | null } | null>(null);
+  const dndRef = useRef(dnd);
+  const setDnd = (v: typeof dnd) => { dndRef.current = v; setDndState(v); };
+  const onDragStartRow = useCallback((id: string) => setDnd({ id, target: null }), []);
+  const onDragOverRow = useCallback((id: string, zone: DropZone | null) => {
+    const d = dndRef.current;
+    if (!d) return;
+    const target = zone ? { id, zone } : null;
+    if (d.target?.id !== target?.id || d.target?.zone !== target?.zone) setDnd({ ...d, target });
+  }, []);
+  const onDropRow = useCallback(() => {
+    const d = dndRef.current;
+    setDnd(null);
+    if (!d?.target) return;
+    const s = useEditor.getState();
+    const pos = dropPosition(s.doc, d.id, d.target.id, d.target.zone);
+    if (pos) s.moveTo(d.id, pos.parent, pos.index);
+  }, []);
+  const onDragEndRow = useCallback(() => setDnd(null), []);
 
   // Navigation mode: keep the selected row in view as you move with the arrows.
   useEffect(() => {
@@ -63,6 +83,12 @@ export function Outline() {
           selected={id === selectedId}
           focused={focusArea === 'outline' && id === selectedId}
           attrNames={attrNames}
+          dragId={dnd?.id ?? null}
+          dropZone={dnd?.target?.id === id ? dnd.target.zone : null}
+          onDragStartRow={onDragStartRow}
+          onDragOverRow={onDragOverRow}
+          onDropRow={onDropRow}
+          onDragEndRow={onDragEndRow}
           shown={doc.attributes.filter((a) => applies(a, id) && String(doc.nodes[id].attrs[a.id] ?? '').trim() !== '').map((a) => a.id).join(',')}
         />
       ))}
@@ -78,9 +104,15 @@ interface RowProps {
   attrNames: Map<string, AttrDef>;
   /** Filled, in-scope attribute ids (joined). */
   shown: string;
+  dragId: string | null;
+  dropZone: DropZone | null;
+  onDragStartRow: (id: string) => void;
+  onDragOverRow: (id: string, zone: DropZone | null) => void;
+  onDropRow: () => void;
+  onDragEndRow: () => void;
 }
 
-const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown }: RowProps) {
+const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown, dragId, dropZone, onDragStartRow, onDragOverRow, onDropRow, onDragEndRow }: RowProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Keep keyboard focus on the selected row, also after indent/outdent moved it in the DOM.
@@ -126,11 +158,30 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
   const hasKids = node.children.length > 0;
 
   return (
-    <div className={`ol-row${selected ? ' sel' : ''}${focused ? ' editing' : ''}${depth === 0 ? ' root' : ''}`} style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }} role="treeitem" aria-expanded={hasKids ? !node.collapsed : undefined}>
+    <div
+      className={`ol-row${selected ? ' sel' : ''}${focused ? ' editing' : ''}${depth === 0 ? ' root' : ''}${dragId === node.id ? ' dragging' : ''}${dropZone ? ` drop-${dropZone}` : ''}`}
+      style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }}
+      role="treeitem"
+      aria-expanded={hasKids ? !node.collapsed : undefined}
+      onDragOver={(e) => {
+        if (!dragId) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const f = (e.clientY - r.top) / r.height;
+        const zone: DropZone = depth === 0 ? 'inside' : f < 0.3 ? 'before' : f > 0.7 ? 'after' : 'inside';
+        const ok = !!dropPosition(useEditor.getState().doc, dragId, node.id, zone);
+        if (ok) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+        onDragOverRow(node.id, ok ? zone : null);
+      }}
+      onDrop={(e) => { e.preventDefault(); onDropRow(); }}
+    >
       {depth > 0 && (
         <button
           className={`ol-caret${hasKids ? '' : ' leaf'}`}
           tabIndex={-1}
+          draggable
+          title="Drag to move · click to collapse"
+          onDragStart={(e) => { e.dataTransfer.setData('text/plain', node.text); e.dataTransfer.effectAllowed = 'move'; onDragStartRow(node.id); }}
+          onDragEnd={onDragEndRow}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => hasKids && useEditor.getState().toggle(node.id)}
           aria-label={hasKids ? (node.collapsed ? 'Expand' : 'Collapse') : undefined}

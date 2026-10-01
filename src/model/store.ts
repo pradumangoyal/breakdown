@@ -35,6 +35,8 @@ interface EditorActions {
   indent(id: string): void;
   outdent(id: string): void;
   move(id: string, delta: -1 | 1): void;
+  /** Drag and drop: put a node (with its subtree) at `index` under `parentId`. */
+  moveTo(id: string, parentId: string, index: number): void;
   remove(id: string): void;
   /** Drops a node that was just created and left empty, undoing its creation (no extra undo step). */
   discardNew(id: string): void;
@@ -121,6 +123,7 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
     indent: (id) => apply((d) => { T.indent(d, id); }),
     outdent: (id) => apply((d) => { T.outdent(d, id); }),
     move: (id, delta) => apply((d) => { T.moveAmongSiblings(d, id, delta); }),
+    moveTo: (id, parentId, index) => { apply((d) => { T.moveNode(d, id, parentId, index); }); set({ selectedId: id }); },
     remove: (id) => {
       let next: string | null = null;
       apply((d) => { next = T.remove(d, id); });

@@ -218,3 +218,41 @@ export function prevLogical(doc: MapDoc, id: string): string | null {
   }
   return prev;
 }
+
+/** True if `id` is `ancestor` or somewhere inside its subtree. */
+export function isInside(doc: MapDoc, id: string, ancestor: string): boolean {
+  if (id === ancestor) return true;
+  return doc.nodes[ancestor].children.some((c) => isInside(doc, id, c));
+}
+
+/**
+ * Moves a node (with its subtree) to `index` among `parentId`'s children.
+ * Refuses moves into its own subtree and moves of the root. Returns whether anything moved.
+ */
+export function moveNode(doc: MapDoc, id: string, parentId: string, index: number): boolean {
+  if (id === doc.rootId || !doc.nodes[parentId] || isInside(doc, parentId, id)) return false;
+  const from = parentOf(doc, id);
+  if (!from) return false;
+  const old = doc.nodes[from].children;
+  const oldIndex = old.indexOf(id);
+  // Same parent: removing the node first shifts later positions by one.
+  let at = Math.max(0, Math.min(index, doc.nodes[parentId].children.length));
+  if (from === parentId && oldIndex < at) at--;
+  if (from === parentId && oldIndex === at) return false;
+  old.splice(oldIndex, 1);
+  doc.nodes[parentId].children.splice(at, 0, id);
+  doc.nodes[parentId].collapsed = false;
+  return true;
+}
+
+export type DropZone = 'before' | 'after' | 'inside';
+
+/** Where a drop lands: above / below the target as a sibling, or as its last child. Null if not allowed. */
+export function dropPosition(doc: MapDoc, dragId: string, targetId: string, zone: DropZone): { parent: string; index: number } | null {
+  if (!doc.nodes[targetId] || !doc.nodes[dragId] || isInside(doc, targetId, dragId)) return null;
+  if (zone === 'inside') return { parent: targetId, index: doc.nodes[targetId].children.length };
+  const parent = parentOf(doc, targetId);
+  if (!parent) return null; // nothing goes beside the central node
+  const i = doc.nodes[parent].children.indexOf(targetId);
+  return { parent, index: zone === 'before' ? i : i + 1 };
+}

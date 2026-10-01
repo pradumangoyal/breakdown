@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3-zoom';
 import { useEditor } from '../model/store';
-import { countDescendants, nextLogical, prevLogical } from '../model/tree';
+import { countDescendants, dropPosition, nextLogical, prevLogical, type DropZone } from '../model/tree';
 import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
@@ -69,6 +69,10 @@ export function MapView() {
   const [sizes, setSizes] = useState(() => new Map<string, Size>());
   /** Node created by Tab / Shift+Enter that is being written now: Enter moves on to a new sibling, empty = discard. */
   const freshRef = useRef<string | null>(null);
+  /** Drag and drop: pointer in viewport coordinates and where the node would land. */
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number; target: { id: string; zone: DropZone } | null } | null>(null);
+  const dragStart = useRef<{ id: string; x: number; y: number } | null>(null);
+  const justDragged = useRef(false);
   const [connector, setConnector] = usePref<Connector>('mindmap.connector', 'elbow', ['elbow', 'curved', 'straight']);
   const [arrange, setArrange] = usePref('mindmap.arrange', 'columns', ['columns', 'compact'] as const);
   /** Attribute values inside the nodes (layout makes room) or just a count badge. */
@@ -93,6 +97,8 @@ export function MapView() {
     l.boxes = stable;
     return l;
   }, [doc, sizes, arrange]);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
 
   /**
    * Selected-path highlight: the chain from the centre to the selected node is bold,
@@ -202,6 +208,67 @@ export function MapView() {
     if (dx || dy) zoomRef.current!.translateBy(select(vp), dx / t.k, dy / t.k);
   }, [selectedId, layout]);
 
+  /** Mouse down on a node: becomes a drag once the pointer moves a few pixels. */
+  const beginDrag = useCallback((id: string, x: number, y: number) => {
+    dragStart.current = { id, x, y };
+    const vp = viewportRef.current!;
+    const targetAt = (clientX: number, clientY: number) => {
+      const r = vp.getBoundingClientRect();
+      const t = zoomTransform(vp);
+      const cx = (clientX - r.left - t.x) / t.k;
+      const cy = (clientY - r.top - t.y) / t.k;
+      const doc = useEditor.getState().doc;
+      for (const [nid, b] of layoutRef.current.boxes) {
+        if (cx < b.x || cx > b.x + b.w || cy < b.y - 4 || cy > b.y + b.h + 4) continue;
+        const f = (cy - b.y) / b.h;
+        const zone: DropZone = nid === doc.rootId ? 'inside' : f < 0.28 ? 'before' : f > 0.72 ? 'after' : 'inside';
+        return dropPosition(doc, id, nid, zone) ? { id: nid, zone } : null;
+      }
+      return null;
+    };
+    let active = false;
+    let last: { id: string; x: number; y: number; target: { id: string; zone: DropZone } | null } | null = null;
+    const move = (e: MouseEvent) => {
+      const st = dragStart.current;
+      if (!st) return;
+      if (!active) {
+        if (Math.hypot(e.clientX - st.x, e.clientY - st.y) < 5) return; // still a click
+        active = true;
+      }
+      const r = vp.getBoundingClientRect();
+      // Near an edge: nudge the map so you can drag beyond what's on screen.
+      const edge = 36;
+      const dx = e.clientX < r.left + edge ? 14 : e.clientX > r.right - edge ? -14 : 0;
+      const dy = e.clientY < r.top + edge ? 14 : e.clientY > r.bottom - edge ? -14 : 0;
+      if (dx || dy) zoomRef.current!.translateBy(select(vp), dx / zoomTransform(vp).k, dy / zoomTransform(vp).k);
+      last = { id: st.id, x: e.clientX - r.left, y: e.clientY - r.top, target: targetAt(e.clientX, e.clientY) };
+      setDrag(last);
+    };
+    const end = (commit: boolean) => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('keydown', onEsc, true);
+      dragStart.current = null;
+      if (active) justDragged.current = true;
+      if (commit && active && last?.target) {
+        const s = useEditor.getState();
+        const pos = dropPosition(s.doc, last.id, last.target.id, last.target.zone);
+        if (pos) s.moveTo(last.id, pos.parent, pos.index);
+      }
+      setDrag(null);
+    };
+    const onUp = () => end(true);
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !active) return;
+      e.preventDefault();
+      e.stopPropagation();
+      end(false); // cancel the drag
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('keydown', onEsc, true);
+  }, []);
+
   const startNew = useCallback((id: string) => {
     freshRef.current = id;
     useEditor.getState().setEditing(id);
@@ -266,6 +333,7 @@ export function MapView() {
       onKeyDown={onKeyDown}
       onFocus={() => useEditor.getState().setFocusArea('map')}
       onClick={(e) => {
+        if (justDragged.current) { justDragged.current = false; return; }
         // A click on empty space (not a pan, not a node or the toolbar) clears the selection.
         if (!(e.target as Element).closest('.mm-node, .mm-tools')) useEditor.getState().select('', 'map');
       }}
@@ -295,6 +363,10 @@ export function MapView() {
           layout.columns.slice(1).map((x, i) => (
             <div key={i} className="mm-col-label" style={{ left: x, top: PAD - 40 }}>{levelName(doc, i + 1)}</div>
           ))}
+        {drag?.target && drag.target.zone !== 'inside' && (() => {
+          const b = layout.boxes.get(drag.target.id)!;
+          return <div className="mm-drop-line" style={{ left: b.x, width: b.w, top: drag.target.zone === 'before' ? b.y - 5 : b.y + b.h + 3 }} />;
+        })()}
         {[...layout.boxes].map(([id, box]) => (
           <MapNode
             key={id}
@@ -309,11 +381,20 @@ export function MapView() {
             attrNames={attrNames}
             shown={shownAttrs(doc.nodes[id])}
             showValues={values === 'shown'}
+            dragging={drag?.id === id}
+            dropInside={drag?.target?.id === id && drag.target.zone === 'inside'}
+            beginDrag={beginDrag}
             register={register}
             finish={finish}
           />
         ))}
       </div>
+      {drag && (
+        <div className="mm-ghost" style={{ left: drag.x + 12, top: drag.y + 8 }}>
+          {(doc.nodes[drag.id]?.text.split('\n')[0] || 'Untitled').slice(0, 40)}
+          <span>{drag.target ? (drag.target.zone === 'inside' ? 'move under' : drag.target.zone === 'before' ? 'place above' : 'place below') : 'drop on a node'}</span>
+        </div>
+      )}
       <div className="mm-tools">
         <button className={values === 'shown' ? 'on' : ''} aria-pressed={values === 'shown'} title="Show attribute values inside the nodes (off: just a count)" onClick={() => setValues(values === 'shown' ? 'count' : 'shown')}>Values</button>
         <button className={arrange === 'columns' ? 'on' : ''} aria-pressed={arrange === 'columns'} title="Line up each level in its own column, like the Sheet" onClick={() => setArrange(arrange === 'columns' ? 'compact' : 'columns')}>Columns</button>
@@ -361,14 +442,17 @@ interface MapNodeProps {
   attrNames: Map<string, AttrDef>;
   shown: string;
   showValues: boolean;
+  dragging: boolean;
+  dropInside: boolean;
+  beginDrag: (id: string, x: number, y: number) => void;
   register: (id: string, el: HTMLDivElement | null) => void;
   finish: (id: string, value: string, how: EditEnd) => void;
 }
 
-const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, attrNames, shown, showValues, register, finish }: MapNodeProps) {
+const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, attrNames, shown, showValues, dragging, dropInside, beginDrag, register, finish }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
   const chips = shown ? shown.split(',').map((k) => [k, node.attrs[k]] as const) : [];
-  const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${editing ? ' editing' : ''}${dim ? ' dim' : ''}`;
+  const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${editing ? ' editing' : ''}${dim ? ' dim' : ''}${dragging ? ' dragging' : ''}${dropInside ? ' drop-inside' : ''}`;
   const summary = chips.map(([k, v]) => `${attrNames.get(k)!.name}: ${String(v)}`);
 
   return (
@@ -381,6 +465,7 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
         e.preventDefault();
         useEditor.getState().select(node.id, 'map');
         (e.currentTarget.closest('.mm-viewport') as HTMLElement | null)?.focus({ preventScroll: true });
+        if (e.button === 0 && depth > 0) beginDrag(node.id, e.clientX, e.clientY); // the centre can't be moved
       }}
       onDoubleClick={() => useEditor.getState().setEditing(node.id)}
     >

@@ -4,7 +4,7 @@ import { buildDoc } from '../src/model/build';
 import type { MapDoc } from '../src/model/types';
 import {
   addAttribute, addChild, addSiblingAfter, countDescendants, indent, indexTree,
-  moveAmongSiblings, outdent, remove, setAttr, setCollapsed,
+  dropPosition, moveAmongSiblings, moveNode, outdent, remove, setAttr, setCollapsed,
 } from '../src/model/tree';
 import { randomTree } from '../poc/01-sheet-layout/samples';
 
@@ -117,4 +117,48 @@ describe('tree operations', () => {
       }
     }
   }, 30_000); // ~1 s normally; generous so a busy machine doesn't flake it
+});
+
+describe('moveNode (drag and drop)', () => {
+  const run = (fn: (d: MapDoc) => boolean) => {
+    let ok = false;
+    const doc = produce(sample(), (d) => { ok = fn(d); });
+    return { ok, out: outline(doc) };
+  };
+
+  it('moves a node under another parent, with its subtree', () => {
+    const { ok, out } = run((d) => moveNode(d, idOf(d, 'A'), idOf(d, 'C'), 0));
+    expect(ok).toBe(true);
+    expect(out).toBe('R\n  B\n  C\n    A\n      a1\n      a2');
+  });
+
+  it('reorders within the same parent, accounting for the removed slot', () => {
+    expect(run((d) => moveNode(d, idOf(d, 'A'), d.rootId, 2)).out).toBe('R\n  B\n  A\n    a1\n    a2\n  C'); // drop between B and C
+    expect(run((d) => moveNode(d, idOf(d, 'C'), d.rootId, 0)).out).toBe('R\n  C\n  A\n    a1\n    a2\n  B');
+    expect(run((d) => moveNode(d, idOf(d, 'A'), d.rootId, 1)).ok).toBe(false); // dropped where it already is
+  });
+
+  it('refuses to move a node into its own branch, or to move the root', () => {
+    expect(run((d) => moveNode(d, idOf(d, 'A'), idOf(d, 'a1'), 0)).ok).toBe(false);
+    expect(run((d) => moveNode(d, idOf(d, 'A'), idOf(d, 'A'), 0)).ok).toBe(false);
+    expect(run((d) => moveNode(d, d.rootId, idOf(d, 'B'), 0)).ok).toBe(false);
+  });
+
+  it('expands a collapsed target so the moved node stays visible', () => {
+    const doc = produce(sample(), (d) => { d.nodes[idOf(d, 'A')].collapsed = true; moveNode(d, idOf(d, 'B'), idOf(d, 'A'), 0); });
+    expect(doc.nodes[idOf(doc, 'A')].collapsed).toBe(false);
+  });
+});
+
+describe('dropPosition', () => {
+  it('maps drop zones to a parent and index, and refuses impossible drops', () => {
+    const d = sample();
+    const B = idOf(d, 'B');
+    expect(dropPosition(d, idOf(d, 'C'), B, 'before')).toEqual({ parent: d.rootId, index: 1 });
+    expect(dropPosition(d, idOf(d, 'C'), B, 'after')).toEqual({ parent: d.rootId, index: 2 });
+    expect(dropPosition(d, idOf(d, 'C'), B, 'inside')).toEqual({ parent: B, index: 0 });
+    expect(dropPosition(d, idOf(d, 'A'), idOf(d, 'a1'), 'inside')).toBeNull(); // into its own branch
+    expect(dropPosition(d, idOf(d, 'A'), d.rootId, 'before')).toBeNull();     // beside the centre
+    expect(dropPosition(d, idOf(d, 'A'), d.rootId, 'inside')).toEqual({ parent: d.rootId, index: 3 });
+  });
 });
