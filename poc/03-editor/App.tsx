@@ -133,10 +133,10 @@ function KeyHelp() {
         <div>
           <h4>Map</h4>
           <dl>
-            <dt>Enter / F2 / Space</dt><dd>Edit the selected node</dd>
-            <dt>Type a letter</dt><dd>Replace its text</dd>
+            <dt>Enter</dt><dd>Add sibling below</dd>
             <dt>Tab</dt><dd>Add child</dd>
-            <dt>⇧Enter</dt><dd>Add sibling below</dd>
+            <dt>⇧Enter / F2 / Space</dt><dd>Edit the selected node</dd>
+            <dt>Type a letter</dt><dd>Replace its text</dd>
             <dt>While writing new</dt><dd>Enter → next sibling · empty Enter / Esc → stop</dd>
             <dt>⇧Enter (editing)</dt><dd>Line break</dd>
             <dt>← / →</dt><dd>Parent / first child</dd>

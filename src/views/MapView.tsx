@@ -247,8 +247,8 @@ export function MapView() {
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
     else if (e.key === 'Tab' && !e.shiftKey) startNew(s.addChild(id));
-    else if (e.key === 'Enter' && e.shiftKey) startNew(s.addSibling(id));
-    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; setSeed(null); s.setEditing(id); }
+    else if (e.key === 'Enter' && !e.shiftKey) startNew(s.addSibling(id)); // same as the outline: Enter = new item
+    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; setSeed(null); s.setEditing(id); } // Shift+Enter edits
     else if (e.key === 'Escape') s.select('', 'map'); // deselect: also clears the path highlight
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent) s.remove(id);
     else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
