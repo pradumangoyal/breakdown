@@ -18,6 +18,36 @@ const estimate = (n: Node, depth: number): Size => ({
 
 const isMod = (e: React.KeyboardEvent | KeyboardEvent) => e.metaKey || e.ctrlKey;
 
+export type Connector = 'elbow' | 'curved' | 'straight';
+const CONNECTOR_KEY = 'mindmap.connector';
+const loadConnector = (): Connector => {
+  try {
+    const v = localStorage.getItem(CONNECTOR_KEY);
+    return v === 'curved' || v === 'straight' ? v : 'elbow';
+  } catch {
+    return 'elbow';
+  }
+};
+
+/**
+ * Connector from a parent's right edge to a child's left edge, as [shared part, child part].
+ * For elbows the shared part (out of the parent + the vertical spine) is drawn in the
+ * parent's colour, so a spine shared by siblings of different branches stays one colour.
+ */
+function edgePaths(style: Connector, x1: number, y1: number, x2: number, y2: number): [string, string] {
+  if (style === 'straight') return ['', `M${x1},${y1} L${x2},${y2}`];
+  const mx = x1 + (x2 - x1) / 2; // all children of a parent share this x, so elbows form one spine
+  if (style === 'curved') return ['', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`];
+  const dy = y2 - y1;
+  if (Math.abs(dy) < 1) return [`M${x1},${y1} H${mx}`, `M${mx},${y2} H${x2}`];
+  const r = Math.min(8, Math.abs(dy) / 2, (x2 - x1) / 2);
+  const s = Math.sign(dy);
+  return [
+    `M${x1},${y1} H${mx - r} Q${mx},${y1} ${mx},${y1 + s * r} V${y2 - s * r}`,
+    `M${mx},${y2 - s * r} Q${mx},${y2} ${mx + r},${y2} H${x2}`,
+  ];
+}
+
 export function MapView() {
   const doc = useEditor((s) => s.doc);
   const selectedId = useEditor((s) => s.selectedId);
@@ -25,6 +55,11 @@ export function MapView() {
   const [sizes, setSizes] = useState(() => new Map<string, Size>());
   /** First keystroke when typing over a selected node, tied to that node. */
   const [seed, setSeed] = useState<{ id: string; text: string } | null>(null);
+  const [connector, setConnector] = useState<Connector>(loadConnector);
+  const changeConnector = (c: Connector) => {
+    setConnector(c);
+    try { localStorage.setItem(CONNECTOR_KEY, c); } catch { /* per-viewer preference only */ }
+  };
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -193,7 +228,9 @@ export function MapView() {
                 x2={b.x}
                 y2={b.y + b.h / 2}
                 color={colorOf(layout.branch.get(to)!)}
+                parentColor={colorOf(layout.branch.get(from)!)}
                 width={layout.depth.get(to) === 1 ? 2.2 : 1.5}
+                style={connector}
               />
             );
           })}
@@ -216,6 +253,11 @@ export function MapView() {
         ))}
       </div>
       <div className="mm-tools">
+        <select value={connector} onChange={(e) => changeConnector(e.target.value as Connector)} title="Line style" aria-label="Line style">
+          <option value="elbow">Elbow lines</option>
+          <option value="curved">Curved lines</option>
+          <option value="straight">Straight lines</option>
+        </select>
         <button title="Zoom in" onClick={() => zoomRef.current!.scaleBy(select(viewportRef.current!), 1.25)}>+</button>
         <button title="Zoom out" onClick={() => zoomRef.current!.scaleBy(select(viewportRef.current!), 0.8)}>−</button>
         <button title="Show the whole map" onClick={() => fit(true)}>Fit</button>
@@ -224,9 +266,15 @@ export function MapView() {
   );
 }
 
-const Edge = memo(function Edge({ x1, y1, x2, y2, color, width }: { x1: number; y1: number; x2: number; y2: number; color: string; width: number }) {
-  const dx = (x2 - x1) / 2;
-  return <path d={`M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`} stroke={color} strokeWidth={width} fill="none" />;
+interface EdgeProps { x1: number; y1: number; x2: number; y2: number; color: string; parentColor: string; width: number; style: Connector }
+const Edge = memo(function Edge({ x1, y1, x2, y2, color, parentColor, width, style }: EdgeProps) {
+  const [shared, own] = edgePaths(style, x1, y1, x2, y2);
+  return (
+    <g fill="none" strokeWidth={width} strokeLinejoin="round" strokeLinecap="round">
+      {shared && <path d={shared} stroke={parentColor} />}
+      <path d={own} stroke={color} />
+    </g>
+  );
 });
 
 function findParent(nodes: Record<string, Node>, id: string): string | null {
@@ -250,7 +298,7 @@ interface MapNodeProps {
 
 const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, editing, seed, attrNames, register, onDone }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
-  const chips = Object.entries(node.attrs).filter(([k]) => attrNames.has(k));
+  const chips = Object.entries(node.attrs).filter(([k, v]) => attrNames.has(k) && String(v).trim() !== '');
   const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}`;
 
   return (

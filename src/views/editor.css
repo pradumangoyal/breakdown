@@ -68,6 +68,7 @@ button { font: inherit; cursor: pointer; }
 .mm-toggle.closed { background: var(--c); color: #fff; }
 .mm-tools { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; }
 .mm-tools button { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; min-width: 30px; height: 28px; font-size: 13px; }
+.mm-tools select { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 6px; height: 28px; font-size: 13px; padding: 0 6px; color: var(--ink); }
 
 /* Attribute panel */
 .ap { overflow: auto; background: var(--panel); padding: 12px; }

@@ -77,7 +77,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames }: Row
     const s = useEditor.getState();
     if (s.selectedId !== node.id || s.focusArea !== 'outline') s.select(node.id, 'outline');
   };
-  const chips = Object.entries(node.attrs).filter(([k]) => attrNames.has(k));
+  const chips = Object.entries(node.attrs).filter(([k, v]) => attrNames.has(k) && String(v).trim() !== '');
   const hasKids = node.children.length > 0;
 
   return (
