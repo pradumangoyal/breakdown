@@ -6,6 +6,7 @@ import { countDescendants } from '../model/tree';
 import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
 import { H_GAP, PAD, layoutMap, type Box, type Size } from './layout';
+import { AutoTextarea } from './AutoTextarea';
 
 const BRANCH_COLORS = ['#2f6fdf', '#d9480f', '#2b8a3e', '#9c36b5', '#c2255c', '#0c8599', '#e67700', '#5f3dc4'];
 const colorOf = (b: number) => (b < 0 ? '#495057' : BRANCH_COLORS[b % BRANCH_COLORS.length]);
@@ -380,7 +381,7 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
 
 function InlineEdit({ node, seed, onDone }: { node: Node; seed: string | null; onDone: () => void }) {
   const [value, setValue] = useState(seed ?? node.text);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const done = useRef(false);
 
   useLayoutEffect(() => {
@@ -401,17 +402,17 @@ function InlineEdit({ node, seed, onDone }: { node: Node; seed: string | null; o
   };
 
   return (
-    <input
+    <AutoTextarea
       ref={inputRef}
       className="mm-input"
       value={value}
-      size={Math.max(6, value.length + 1)}
+      cols={Math.max(6, ...value.split('\n').map((l) => l.length + 1))}
       onChange={(e) => setValue(e.target.value)}
       onBlur={() => commit()}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); } // Shift+Enter = line break
         else if (e.key === 'Escape') { e.preventDefault(); setValue(node.text); done.current = true; useEditor.getState().setEditing(null); onDone(); }
         else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); commit('child'); }
       }}

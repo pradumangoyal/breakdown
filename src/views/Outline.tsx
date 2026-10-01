@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import { useEditor } from '../model/store';
 import { indexTree } from '../model/tree';
 import type { AttrDef, Node } from '../model/types';
+import { AutoTextarea, caretOnFirstLine, caretOnLastLine } from './AutoTextarea';
 
 const isMod = (e: React.KeyboardEvent) => e.metaKey || e.ctrlKey;
 
@@ -37,7 +38,7 @@ interface RowProps {
 }
 
 const Row = memo(function Row({ node, depth, selected, focused, attrNames }: RowProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Keep keyboard focus on the selected row, also after indent/outdent moved it in the DOM.
   useLayoutEffect(() => {
@@ -48,7 +49,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames }: Row
     }
   });
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const s = useEditor.getState();
     const id = node.id;
     // Looked up at key time so rows don't re-render whenever any other row changes.
@@ -59,7 +60,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames }: Row
 
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
-    else if (e.key === 'Enter') s.addSibling(id, true);
+    else if (e.key === 'Enter' && !e.shiftKey) s.addSibling(id, true); // Shift+Enter = line break
     else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
     else if (e.key === 'Backspace' && isMod(e) && e.shiftKey && parent) s.remove(id);
     else if (e.key === 'Backspace' && node.text === '' && !node.children.length && parent) s.remove(id);
@@ -67,8 +68,8 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames }: Row
     else if (e.altKey && e.key === 'ArrowDown') s.move(id, 1);
     else if (isMod(e) && e.key === 'ArrowUp') s.toggle(id, true);
     else if (isMod(e) && e.key === 'ArrowDown') s.toggle(id, false);
-    else if (e.key === 'ArrowUp' && i > 0) s.select(visible[i - 1], 'outline');
-    else if (e.key === 'ArrowDown' && i < visible.length - 1) s.select(visible[i + 1], 'outline');
+    else if (e.key === 'ArrowUp' && i > 0 && caretOnFirstLine(e.currentTarget)) s.select(visible[i - 1], 'outline');
+    else if (e.key === 'ArrowDown' && i < visible.length - 1 && caretOnLastLine(e.currentTarget)) s.select(visible[i + 1], 'outline');
     else handled = false;
     if (handled) e.preventDefault();
   };
@@ -93,7 +94,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames }: Row
           {hasKids ? (node.collapsed ? '▸' : '▾') : '•'}
         </button>
       )}
-      <input
+      <AutoTextarea
         ref={inputRef}
         className="ol-input"
         value={node.text}

@@ -36,15 +36,15 @@ button { font: inherit; cursor: pointer; }
 
 /* Outline */
 .ol { overflow: auto; background: var(--panel); padding: 8px 0 80px; }
-.ol-row { display: flex; align-items: center; gap: 4px; padding-right: 8px; min-height: 28px; border-left: 3px solid transparent; }
+.ol-row { display: flex; align-items: flex-start; gap: 4px; padding: 2px 8px 2px 0; min-height: 28px; border-left: 3px solid transparent; }
 .ol-row.sel { background: var(--accent-soft); border-left-color: var(--accent); }
 .ol-row.root { min-height: 38px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .ol-row.root .ol-input { font-size: 16px; font-weight: 650; }
-.ol-caret { width: 18px; height: 18px; flex: none; border: 0; background: none; padding: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
+.ol-caret { width: 18px; height: 18px; margin-top: 3px; flex: none; border: 0; background: none; padding: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
 .ol-caret.leaf { cursor: default; font-size: 10px; color: #98a2b3; }
-.ol-input { flex: 1; min-width: 60px; border: 0; background: transparent; font: inherit; color: inherit; padding: 3px 2px; outline: none; }
-.ol-hidden { font-size: 11px; color: var(--muted); background: var(--chip); border-radius: 8px; padding: 0 6px; }
-.ol-chips { display: flex; gap: 4px; flex-wrap: nowrap; overflow: hidden; max-width: 45%; }
+.ol-input { flex: 1; min-width: 60px; border: 0; background: transparent; font: inherit; line-height: 1.4; color: inherit; padding: 3px 2px; outline: none; resize: none; overflow: hidden; display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ol-hidden { margin-top: 5px;  font-size: 11px; color: var(--muted); background: var(--chip); border-radius: 8px; padding: 0 6px; }
+.ol-chips { margin-top: 5px; display: flex; gap: 4px; flex-wrap: nowrap; overflow: hidden; max-width: 45%; }
 .chip { font-size: 11px; line-height: 16px; background: var(--chip); color: #475467; border-radius: 4px; padding: 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
 
 /* Map */
@@ -63,7 +63,7 @@ button { font: inherit; cursor: pointer; }
 .mm-node.d0.sel { box-shadow: 0 0 0 3px rgba(47, 111, 223, .55); }
 .mm-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .mm-empty { color: #98a2b3; font-style: italic; }
-.mm-input { font: inherit; color: inherit; background: transparent; border: 0; outline: none; padding: 0; max-width: 240px; }
+.mm-input { font: inherit; line-height: inherit; color: inherit; background: transparent; border: 0; outline: none; padding: 0; max-width: 240px; resize: none; overflow: hidden; display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mm-row { display: flex; align-items: center; gap: 6px; }
 .mm-badge { flex: none; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--chip); color: #475467; font-size: 10px; font-weight: 600; line-height: 16px; text-align: center; }
 .mm-node.d0 .mm-badge { background: #374151; color: #e5e7eb; }
