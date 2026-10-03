@@ -8,6 +8,8 @@ import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
 import { H_GAP, PAD, layoutMap, type Box, type Size } from './layout';
 import { AutoTextarea, insertLineBreak } from './AutoTextarea';
+import { AttrPopover } from './AttrPopover';
+import { isAttrKey, useUi } from '../model/ui';
 
 const BRANCH_COLORS = ['#2f6fdf', '#d9480f', '#2b8a3e', '#9c36b5', '#c2255c', '#0c8599', '#e67700', '#5f3dc4'];
 const colorOf = (b: number) => (b < 0 ? '#495057' : BRANCH_COLORS[b % BRANCH_COLORS.length]);
@@ -77,6 +79,12 @@ export function MapView() {
   const [arrange, setArrange] = usePref('mindmap.arrange', 'columns', ['columns', 'compact'] as const);
   /** Attribute values inside the nodes (layout makes room) or just a count badge. */
   const [values, setValues] = usePref('mindmap.values', 'shown', ['shown', 'count'] as const);
+  /** Inline attribute editor below a node (⌘I / I); re-positioned when you pan or zoom. */
+  const attrPop = useUi((s) => (s.attrPop?.from === 'map' ? s.attrPop : null));
+  const attrPopOpen = useRef(false);
+  attrPopOpen.current = !!attrPop;
+  const [, setZoomTick] = useState(0);
+  useEffect(() => () => { if (useUi.getState().attrPop?.from === 'map') useUi.getState().closeAttrPop(); }, []);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -149,6 +157,7 @@ export function MapView() {
       .on('zoom', (e) => {
         const t = e.transform;
         canvasRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
+        if (attrPopOpen.current) setZoomTick((n) => n + 1); // keep the attribute editor under its node
       });
     z.clickDistance(4);
     sel.call(z).on('dblclick.zoom', null);
@@ -281,6 +290,7 @@ export function MapView() {
     if (s.doc.nodes[id] && value !== s.doc.nodes[id].text) s.setText(id, value);
     freshRef.current = null;
     if (isFresh && value.trim() === '') s.discardNew(id); // nothing written: no stray "Untitled"
+    else if (how === 'attrs') { s.setEditing(null); useUi.getState().openAttrPop(id, 'map'); return; }
     else if (how === 'tab') return startNew(s.addChild(id));
     else if (how === 'enter' && isFresh) return startNew(s.addSibling(id)); // keep writing siblings
     s.setEditing(null);
@@ -306,6 +316,7 @@ export function MapView() {
     else if (e.key === 'Tab' && !e.shiftKey) startNew(s.addChild(id));
     else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) startNew(s.addSibling(id)); // same as the outline: Enter = new item
     else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; s.setEditing(id); } // Shift+Enter / Ctrl+Enter edit
+    else if (isAttrKey(e) || (e.key.toLowerCase() === 'i' && !isMod(e) && !e.altKey)) useUi.getState().openAttrPop(id, 'map');
     else if (e.key === 'Escape') s.select('', 'map'); // deselect: also clears the path highlight
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent) s.remove(id);
     else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
@@ -395,6 +406,24 @@ export function MapView() {
           <span>{drag.target ? (drag.target.zone === 'inside' ? 'move under' : drag.target.zone === 'before' ? 'place above' : 'place below') : 'drop on a node'}</span>
         </div>
       )}
+      {attrPop && layout.boxes.has(attrPop.id) && (() => {
+        const vp = viewportRef.current;
+        const b = layout.boxes.get(attrPop.id)!;
+        const t = vp ? zoomTransform(vp) : zoomIdentity;
+        const left = Math.max(8, t.x + b.x * t.k);
+        const below = t.y + (b.y + b.h) * t.k + 8;
+        // Near the bottom edge: open above the node instead.
+        const flip = vp ? below + 220 > vp.clientHeight : false;
+        const style = flip ? { left, bottom: (vp?.clientHeight ?? 0) - (t.y + b.y * t.k) + 8 } : { left, top: below };
+        return (
+          <AttrPopover
+            nodeId={attrPop.id}
+            className="on-map"
+            style={style}
+            onClose={() => { useUi.getState().closeAttrPop(); viewportRef.current?.focus({ preventScroll: true }); }}
+          />
+        );
+      })()}
       <div className="mm-tools">
         <button className={values === 'shown' ? 'on' : ''} aria-pressed={values === 'shown'} title="Show attribute values inside the nodes (off: just a count)" onClick={() => setValues(values === 'shown' ? 'count' : 'shown')}>Values</button>
         <button className={arrange === 'columns' ? 'on' : ''} aria-pressed={arrange === 'columns'} title="Line up each level in its own column, like the Sheet" onClick={() => setArrange(arrange === 'columns' ? 'compact' : 'columns')}>Columns</button>
@@ -493,7 +522,7 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
   );
 });
 
-type EditEnd = 'enter' | 'tab' | 'escape' | 'blur';
+type EditEnd = 'enter' | 'tab' | 'escape' | 'blur' | 'attrs';
 
 function InlineEdit({ node, finish }: { node: Node; finish: (id: string, value: string, how: EditEnd) => void }) {
   const [value, setValue] = useState(node.text);
@@ -523,7 +552,8 @@ function InlineEdit({ node, finish }: { node: Node; finish: (id: string, value: 
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); insertLineBreak(e.currentTarget); } // Ctrl+Enter = line break
+        if (isAttrKey(e)) { e.preventDefault(); end('attrs'); } // ⌘I / Ctrl+I: save the text, edit this node's attributes
+        else if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); insertLineBreak(e.currentTarget); } // Ctrl+Enter = line break
         else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); end('enter'); } // Shift+Enter = line break (textarea default)
         else if (e.key === 'Escape') { e.preventDefault(); end('escape'); }
         else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); end('tab'); }

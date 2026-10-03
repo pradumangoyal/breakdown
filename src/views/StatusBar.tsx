@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEditor } from '../model/store';
 
-type Mode = 'map-edit' | 'outline-edit' | 'table-edit' | 'sheet-edit' | 'selected-map' | 'selected-outline' | 'selected' | 'none';
+type Mode = 'map-edit' | 'outline-edit' | 'table-edit' | 'sheet-edit' | 'attrs-edit' | 'selected-map' | 'selected-outline' | 'selected' | 'none';
 
 /** What has keyboard focus right now (read from the DOM, so it is always truthful). */
 function useFocusKind() {
@@ -10,7 +10,8 @@ function useFocusKind() {
     const read = () => {
       const el = document.activeElement;
       setKind(
-        el?.closest('.sp-editor') ? 'sheet-edit'
+        el?.closest('.attr-pop') ? 'attrs-edit'
+        : el?.closest('.sp-editor') ? 'sheet-edit'
         : el?.classList.contains('mm-input') ? 'map-edit'
         : el?.classList.contains('ol-input') ? 'outline-edit'
         : el?.closest('.tv td') ? 'table-edit'
@@ -29,12 +30,13 @@ function useFocusKind() {
 }
 
 const HINTS: Record<Mode, string[]> = {
-  'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', 'Esc stop editing'],
-  'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', 'Esc stop editing'],
+  'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', '⇧⇧ attributes', 'Esc stop editing'],
+  'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', '⇧⇧ attributes', 'Esc stop editing'],
   'table-edit': ['Tab next cell', 'Enter next row', 'Esc leave cell'],
+  'attrs-edit': ['Tab / ↑↓ next field', 'Enter / Esc / ⇧⇧ done'],
   'sheet-edit': ['Enter save', 'Tab / ⇧Tab next / previous cell', '⇧Enter / ⌃Enter new line', 'Esc cancel'],
-  'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', '↑↓←→ move', 'Esc deselect'],
-  'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', 'Esc deselect'],
+  'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', '⇧⇧ attributes', '↑↓←→ move', 'Esc deselect'],
+  'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', '⇧⇧ attributes', 'Esc deselect'],
   selected: ['Click into the map or outline to use the keyboard'],
   none: ['Click a node, or press ↓ on the map'],
 };
@@ -46,7 +48,7 @@ export function StatusBar() {
   const node = doc.nodes[selectedId];
 
   const mode: Mode =
-    focus === 'map-edit' || focus === 'outline-edit' || focus === 'table-edit' || focus === 'sheet-edit' ? focus
+    focus === 'map-edit' || focus === 'outline-edit' || focus === 'table-edit' || focus === 'sheet-edit' || focus === 'attrs-edit' ? focus
     : !node ? 'none'
     : focus === 'map' ? 'selected-map'
     : focus === 'outline' ? 'selected-outline'
@@ -57,6 +59,7 @@ export function StatusBar() {
     mode === 'none' ? 'Nothing selected'
     : mode === 'table-edit' ? `✎ Editing values · ${name}`
     : mode === 'sheet-edit' ? '✎ Editing the Sheet'
+    : mode === 'attrs-edit' ? `✎ Editing attributes · ${name}`
     : editing ? `✎ Editing · ${name}`
     : `Selected · ${name}`;
 

@@ -4,6 +4,8 @@ import { dropPosition, indexTree, type DropZone } from '../model/tree';
 import { scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
 import { AutoTextarea, caretOnFirstLine, caretOnLastLine, insertLineBreak } from './AutoTextarea';
+import { AttrPopover } from './AttrPopover';
+import { isAttrKey, useUi } from '../model/ui';
 
 const isMod = (e: React.KeyboardEvent) => e.metaKey || e.ctrlKey;
 
@@ -16,6 +18,16 @@ export function Outline() {
   const applies = useMemo(() => scopeTester(doc), [doc]);
   const olRef = useRef<HTMLDivElement>(null);
   const nav = focusArea === 'outlineNav';
+  const attrPop = useUi((s) => (s.attrPop?.from === 'outline' ? s.attrPop : null));
+  useEffect(() => () => { if (useUi.getState().attrPop?.from === 'outline') useUi.getState().closeAttrPop(); }, []);
+  /** Closing the attribute editor returns you to the row: typing again, or row navigation. */
+  const closeAttrPop = useCallback(() => {
+    const p = useUi.getState().attrPop;
+    useUi.getState().closeAttrPop();
+    if (!p) return;
+    if (p.resume === 'edit') useEditor.getState().select(p.id, 'outline');
+    else { useEditor.getState().select(p.id, 'outlineNav'); olRef.current?.focus({ preventScroll: true }); }
+  }, []);
   // Drag and drop (rows are dragged by their bullet).
   const [dnd, setDndState] = useState<{ id: string; target: { id: string; zone: DropZone } | null } | null>(null);
   const dndRef = useRef(dnd);
@@ -58,6 +70,7 @@ export function Outline() {
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
     else if ((e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) || e.key === 'F2' || e.key === ' ') s.setFocusArea('outline'); // edit this row
     else if (e.key === 'Enter') { s.addSibling(id, true); s.setFocusArea('outline'); } // new item, typing
+    else if (isAttrKey(e) || (e.key.toLowerCase() === 'i' && !isMod(e) && !e.altKey)) useUi.getState().openAttrPop(id, 'outline', 'select');
     else if (e.key === 'Escape') s.select('', 'outlineNav');
     else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent.get(id)) s.remove(id);
@@ -83,6 +96,8 @@ export function Outline() {
           selected={id === selectedId}
           focused={focusArea === 'outline' && id === selectedId}
           attrNames={attrNames}
+          attrOpen={attrPop?.id === id}
+          onCloseAttrs={closeAttrPop}
           dragId={dnd?.id ?? null}
           dropZone={dnd?.target?.id === id ? dnd.target.zone : null}
           onDragStartRow={onDragStartRow}
@@ -104,6 +119,9 @@ interface RowProps {
   attrNames: Map<string, AttrDef>;
   /** Filled, in-scope attribute ids (joined). */
   shown: string;
+  /** The inline attribute editor is open under this row. */
+  attrOpen: boolean;
+  onCloseAttrs: () => void;
   dragId: string | null;
   dropZone: DropZone | null;
   onDragStartRow: (id: string) => void;
@@ -112,13 +130,13 @@ interface RowProps {
   onDragEndRow: () => void;
 }
 
-const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown, dragId, dropZone, onDragStartRow, onDragOverRow, onDropRow, onDragEndRow }: RowProps) {
+const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown, attrOpen, onCloseAttrs, dragId, dropZone, onDragStartRow, onDragOverRow, onDropRow, onDragEndRow }: RowProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Keep keyboard focus on the selected row, also after indent/outdent moved it in the DOM.
   useLayoutEffect(() => {
     const el = inputRef.current;
-    if (focused && el && document.activeElement !== el) {
+    if (focused && !attrOpen && el && document.activeElement !== el) {
       el.focus({ preventScroll: false });
       el.setSelectionRange(el.value.length, el.value.length);
     }
@@ -135,6 +153,7 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
 
     if (isMod(e) && e.key.toLowerCase() === 'z') (e.shiftKey ? s.redo() : s.undo());
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
+    else if (isAttrKey(e)) useUi.getState().openAttrPop(id, 'outline', 'edit'); // ⌘I / Ctrl+I: edit this row's attributes
     else if (e.key === 'Escape') { s.setFocusArea('outlineNav'); (e.currentTarget.closest('.ol') as HTMLElement | null)?.focus(); } // stop editing, keep the row selected
     else if (e.key === 'Enter' && e.ctrlKey) insertLineBreak(e.currentTarget); // Ctrl+Enter = line break, like Shift+Enter
     else if (e.key === 'Enter' && !e.shiftKey) s.addSibling(id, true); // Shift+Enter = line break (textarea default)
@@ -159,54 +178,57 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
   const hasKids = node.children.length > 0;
 
   return (
-    <div
-      className={`ol-row${selected ? ' sel' : ''}${focused ? ' editing' : ''}${depth === 0 ? ' root' : ''}${dragId === node.id ? ' dragging' : ''}${dropZone ? ` drop-${dropZone}` : ''}`}
-      style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }}
-      role="treeitem"
-      aria-expanded={hasKids ? !node.collapsed : undefined}
-      onDragOver={(e) => {
-        if (!dragId) return;
-        const r = e.currentTarget.getBoundingClientRect();
-        const f = (e.clientY - r.top) / r.height;
-        const zone: DropZone = depth === 0 ? 'inside' : f < 0.3 ? 'before' : f > 0.7 ? 'after' : 'inside';
-        const ok = !!dropPosition(useEditor.getState().doc, dragId, node.id, zone);
-        if (ok) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
-        onDragOverRow(node.id, ok ? zone : null);
-      }}
-      onDrop={(e) => { e.preventDefault(); onDropRow(); }}
-    >
-      {depth > 0 && (
-        <button
-          className={`ol-caret${hasKids ? '' : ' leaf'}`}
-          tabIndex={-1}
-          draggable
-          title="Drag to move · click to collapse"
-          onDragStart={(e) => { e.dataTransfer.setData('text/plain', node.text); e.dataTransfer.effectAllowed = 'move'; onDragStartRow(node.id); }}
-          onDragEnd={onDragEndRow}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => hasKids && useEditor.getState().toggle(node.id)}
-          aria-label={hasKids ? (node.collapsed ? 'Expand' : 'Collapse') : undefined}
-        >
-          {hasKids ? (node.collapsed ? '▸' : '▾') : '•'}
-        </button>
-      )}
-      <AutoTextarea
-        ref={inputRef}
-        className="ol-input"
-        value={node.text}
-        placeholder={depth === 0 ? 'What are you breaking down?' : ''}
-        onChange={(e) => useEditor.getState().setText(node.id, e.target.value)}
-        onFocus={selectMe}
-        onMouseDown={selectMe}
-        onKeyDown={onKeyDown}
-        spellCheck={false}
-      />
-      {node.collapsed && hasKids && <span className="ol-hidden">{node.children.length}+</span>}
-      {chips.length > 0 && (
-        <span className="ol-chips">
-          {chips.map(([k, v]) => <span key={k} className="chip">{attrNames.get(k)!.name}: {String(v)}</span>)}
-        </span>
-      )}
-    </div>
+    <>
+      <div
+        className={`ol-row${selected ? ' sel' : ''}${focused ? ' editing' : ''}${depth === 0 ? ' root' : ''}${dragId === node.id ? ' dragging' : ''}${dropZone ? ` drop-${dropZone}` : ''}`}
+        style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }}
+        role="treeitem"
+        aria-expanded={hasKids ? !node.collapsed : undefined}
+        onDragOver={(e) => {
+          if (!dragId) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          const f = (e.clientY - r.top) / r.height;
+          const zone: DropZone = depth === 0 ? 'inside' : f < 0.3 ? 'before' : f > 0.7 ? 'after' : 'inside';
+          const ok = !!dropPosition(useEditor.getState().doc, dragId, node.id, zone);
+          if (ok) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+          onDragOverRow(node.id, ok ? zone : null);
+        }}
+        onDrop={(e) => { e.preventDefault(); onDropRow(); }}
+      >
+        {depth > 0 && (
+          <button
+            className={`ol-caret${hasKids ? '' : ' leaf'}`}
+            tabIndex={-1}
+            draggable
+            title="Drag to move · click to collapse"
+            onDragStart={(e) => { e.dataTransfer.setData('text/plain', node.text); e.dataTransfer.effectAllowed = 'move'; onDragStartRow(node.id); }}
+            onDragEnd={onDragEndRow}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => hasKids && useEditor.getState().toggle(node.id)}
+            aria-label={hasKids ? (node.collapsed ? 'Expand' : 'Collapse') : undefined}
+          >
+            {hasKids ? (node.collapsed ? '▸' : '▾') : '•'}
+          </button>
+        )}
+        <AutoTextarea
+          ref={inputRef}
+          className="ol-input"
+          value={node.text}
+          placeholder={depth === 0 ? 'What are you breaking down?' : ''}
+          onChange={(e) => useEditor.getState().setText(node.id, e.target.value)}
+          onFocus={selectMe}
+          onMouseDown={selectMe}
+          onKeyDown={onKeyDown}
+          spellCheck={false}
+        />
+        {node.collapsed && hasKids && <span className="ol-hidden">{node.children.length}+</span>}
+        {chips.length > 0 && (
+          <span className="ol-chips">
+            {chips.map(([k, v]) => <span key={k} className="chip">{attrNames.get(k)!.name}: {String(v)}</span>)}
+          </span>
+        )}
+      </div>
+      {attrOpen && <AttrPopover nodeId={node.id} className="in-outline" style={{ marginLeft: 26 + Math.max(0, depth - 1) * 20 }} onClose={onCloseAttrs} />}
+    </>
   );
 });
