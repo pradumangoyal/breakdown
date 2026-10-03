@@ -33,7 +33,7 @@ const HINTS: Record<Mode, string[]> = {
   'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', '→ at end: attributes', 'Esc stop editing'],
   'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', '→ at end: attributes', 'Esc stop editing'],
   'table-edit': ['Tab next cell', 'Enter next row', 'Esc leave cell'],
-  'attrs-edit': ['→ / ← next / previous field', '← from the first: back to the text', 'Enter done', 'Esc stop editing'],
+  'attrs-edit': ['↑ / ↓ previous / next field', '← back to the text', 'Enter on a dropdown: open it', 'Esc stop editing'],
   'sheet-edit': ['Enter save', 'Tab / ⇧Tab next / previous cell', '⇧Enter / ⌃Enter new line', 'Esc cancel'],
   'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', 'I attributes', '↑↓←→ move', 'Esc deselect'],
   'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', 'I attributes', 'Esc deselect'],

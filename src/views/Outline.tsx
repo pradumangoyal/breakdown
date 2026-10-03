@@ -62,7 +62,7 @@ export function Outline() {
     else if (e.key === 'Enter') { s.addSibling(id, true); s.setFocusArea('outline'); } // new item, typing
     else if (isAttrKey(e) || (e.key.toLowerCase() === 'i' && !isMod(e) && !e.altKey)) {
       s.setFocusArea('outline');
-      requestAnimationFrame(() => focusField(stripFields(olRef.current?.querySelector('.ol-row.sel .attr-strip'))[0], 'start'));
+      requestAnimationFrame(() => focusField(stripFields(olRef.current?.querySelector(`.attr-strip[data-node="${id}"]`))[0], 'start'));
     }
     else if (e.key === 'Escape') s.select('', 'outlineNav');
     else if (e.key === 'Tab') (e.shiftKey ? s.outdent(id) : s.indent(id));
@@ -169,9 +169,8 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
   const hasKids = node.children.length > 0;
 
   return (
-    <>
+    <div className="ol-item" ref={rowRef}>
       <div
-        ref={rowRef}
       className={`ol-row${selected ? ' sel' : ''}${focused ? ' editing' : ''}${depth === 0 ? ' root' : ''}${dragId === node.id ? ' dragging' : ''}${dropZone ? ` drop-${dropZone}` : ''}`}
         style={{ paddingLeft: 8 + Math.max(0, depth - 1) * 20 }}
         role="treeitem"
@@ -214,27 +213,29 @@ const Row = memo(function Row({ node, depth, selected, focused, attrNames, shown
           spellCheck={false}
         />
         {node.collapsed && hasKids && <span className="ol-hidden">{node.children.length}+</span>}
-        {focused ? (
-          // Editing this row: its attribute fields sit at the end of it, reachable with →.
-          <AttrStrip
-            nodeId={node.id}
-            className="in-row"
-            onBack={() => { const el = inputRef.current!; el.focus(); el.setSelectionRange(el.value.length, el.value.length); }}
-            onEnter={() => useEditor.getState().addSibling(node.id, true)}
-            onEscape={() => { useEditor.getState().setFocusArea('outlineNav'); (rowRef.current?.closest('.ol') as HTMLElement | null)?.focus(); }}
-            onVertical={(dir) => {
-              const s = useEditor.getState();
-              const { visible } = indexTree(s.doc);
-              const next = visible[visible.indexOf(node.id) + dir];
-              if (next) s.select(next, 'outline');
-            }}
-          />
-        ) : chips.length > 0 && (
+        {!focused && chips.length > 0 && (
           <span className="ol-chips">
             {chips.map(([k, v]) => <span key={k} className="chip">{attrNames.get(k)!.name}: {String(v)}</span>)}
           </span>
         )}
       </div>
-    </>
+      {focused && (
+        // Editing this row: its attribute fields as a list right under it, reachable with → at the end of the text.
+        <AttrStrip
+          nodeId={node.id}
+          className="in-outline"
+          style={{ marginLeft: 30 + Math.max(0, depth - 1) * 20 }}
+          onBack={() => { const el = inputRef.current!; el.focus(); el.setSelectionRange(el.value.length, el.value.length); }}
+          onEnter={() => useEditor.getState().addSibling(node.id, true)}
+          onEscape={() => { useEditor.getState().setFocusArea('outlineNav'); (rowRef.current?.closest('.ol') as HTMLElement | null)?.focus(); }}
+          onPastEnd={() => {
+            const s = useEditor.getState();
+            const { visible } = indexTree(s.doc);
+            const next = visible[visible.indexOf(node.id) + 1];
+            if (next) s.select(next, 'outline');
+          }}
+        />
+      )}
+    </div>
   );
 });

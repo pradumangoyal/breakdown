@@ -20,20 +20,22 @@ const atStart = (el: HTMLInputElement | HTMLTextAreaElement) => el.selectionStar
 export const caretAtEnd = atEnd;
 
 /**
- * The attribute fields of the node being edited, shown right beside it like the rest of a
- * spreadsheet row. Only attributes that apply to the node. Values save as you type.
- *   → at the end of a field / ← at its start: next / previous field (← from the first: back to the text)
- *   Tab / ⇧Tab: next / previous field · Enter: same as Enter on the node text · Esc: stop editing
+ * The attribute fields of the node being edited, as a vertical list right beside it.
+ * Only attributes that apply to the node. Values save as you type.
+ *   ↓ / Tab: next field · ↑ / ⇧Tab: previous field (↑ from the first: back to the text)
+ *   ← (at the start of a text field, or on a dropdown): back to the text
+ *   Enter: on a dropdown opens it; on a text field same as Enter on the node text · Esc: stop editing
  */
-export function AttrStrip({ nodeId, className = '', onBack, onEnter, onEscape, onVertical }: {
+export function AttrStrip({ nodeId, className = '', style, onBack, onEnter, onEscape, onPastEnd }: {
   nodeId: string;
   className?: string;
-  /** Leave the strip back to the node text. */
+  style?: React.CSSProperties;
+  /** Leave the fields back to the node text. */
   onBack: () => void;
   onEnter: () => void;
   onEscape: () => void;
-  /** ↑ / ↓ in a text field (the outline uses it to move between rows). */
-  onVertical?: (dir: 1 | -1) => void;
+  /** ↓ from the last field (the outline uses it to move to the next row). */
+  onPastEnd?: () => void;
 }) {
   const doc = useEditor((s) => s.doc);
   const node = doc.nodes[nodeId];
@@ -49,21 +51,21 @@ export function AttrStrip({ nodeId, className = '', onBack, onEnter, onEscape, o
     if (i < 0) return;
     e.stopPropagation(); // map / outline / app shortcuts stay out of the fields
     const text = t instanceof HTMLInputElement;
-    const go = (dir: 1 | -1) => {
+    const to = (j: number) => {
       e.preventDefault();
-      if (dir === -1 && i === 0) onBack();
-      else focusField(all[i + dir], dir === 1 ? 'start' : 'end');
+      if (j < 0) onBack();
+      else if (j < all.length) focusField(all[j], 'end');
+      else if (e.key === 'ArrowDown') onPastEnd?.();
     };
-    if (e.key === 'ArrowRight' && (!text || atEnd(t)) && i < all.length - 1) go(1);
-    else if (e.key === 'ArrowLeft' && (!text || atStart(t))) go(-1);
-    else if (e.key === 'Tab') { if (e.shiftKey) go(-1); else if (i < all.length - 1) go(1); else e.preventDefault(); }
-    else if (e.key === 'Enter') { e.preventDefault(); onEnter(); }
+    if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) to(i + 1);
+    else if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) to(i - 1);
+    else if (e.key === 'ArrowLeft' && (!text || atStart(t))) { e.preventDefault(); onBack(); }
+    else if (e.key === 'Enter') { e.preventDefault(); onEnter(); } // dropdowns handle Enter themselves (open the list)
     else if (e.key === 'Escape') { e.preventDefault(); onEscape(); }
-    else if (text && onVertical && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { e.preventDefault(); onVertical(e.key === 'ArrowDown' ? 1 : -1); }
   };
 
   return (
-    <div className={`attr-strip ${className}`} onKeyDown={onKeyDown} onMouseDown={(e) => e.stopPropagation()}>
+    <div className={`attr-strip ${className}`} style={style} data-node={nodeId} onKeyDown={onKeyDown} onMouseDown={(e) => e.stopPropagation()}>
       {fields.map((a) => (
         <label key={a.id} className="attr-strip-field" title={describeScope(doc, a)}>
           <span>{a.name}</span>

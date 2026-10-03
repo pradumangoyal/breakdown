@@ -222,16 +222,17 @@ select.stray { color: var(--warn); }
 .sp-editor textarea, .sp-editor input, .sp-editor select { display: block; width: 100%; min-height: inherit; border: 0; outline: none; resize: none; overflow: hidden; font: 12px/1.35 Arial, sans-serif; padding: 2px 6px; background: transparent; white-space: pre-wrap; }
 .sp-editor select { cursor: pointer; padding: 2px 3px; }
 
-/* Attribute fields beside the node being edited (→ at the end of the text moves into them) */
+/* Attribute fields of the node being edited: a vertical list beside it (→ at the end of the text moves in) */
 .mm-edit { display: contents; }
-.attr-strip { display: flex; gap: 6px; align-items: flex-end; font-weight: 400; font-size: 12px; }
-.attr-strip.on-map { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); z-index: 6; padding: 6px 8px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 8px 22px rgba(16, 24, 40, .16); white-space: nowrap; color: var(--ink); }
-.attr-strip.on-map::before { content: ''; position: absolute; left: -15px; top: 50%; width: 14px; border-top: 2px dashed var(--accent); }
-.attr-strip.in-row { flex: none; margin-top: 1px; max-width: 70%; overflow-x: auto; }
-.attr-strip-field { display: flex; flex-direction: column; gap: 1px; }
-.attr-strip-field span { font-size: 10px; color: var(--muted); padding-left: 2px; white-space: nowrap; }
-.attr-strip-field input, .attr-strip-field select { font: inherit; font-size: 12px; width: 120px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 3px 6px; background: #fff; color: var(--ink); }
-.attr-strip-field input:focus, .attr-strip-field select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.attr-strip { display: flex; flex-direction: column; gap: 4px; font-weight: 400; font-size: 12px; color: var(--ink); }
+.attr-strip.on-map { position: absolute; left: calc(100% + 14px); top: -6px; z-index: 6; padding: 8px 10px; min-width: 230px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 8px 22px rgba(16, 24, 40, .16); white-space: nowrap; }
+.attr-strip.on-map::before { content: ''; position: absolute; left: -15px; top: 18px; width: 14px; border-top: 2px dashed var(--accent); }
+.attr-strip.in-outline { margin: 2px 12px 8px; padding: 6px 8px; max-width: 320px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; }
+.attr-strip-field { display: grid; grid-template-columns: 88px 1fr; align-items: center; gap: 8px; }
+.attr-strip-field span { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attr-strip-field input { font: inherit; font-size: 12px; width: 100%; min-width: 0; border: 1px solid var(--line-strong); border-radius: 5px; padding: 3px 6px; background: #fff; color: var(--ink); }
+.attr-strip-field input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.attr-strip-field .ks, .attr-strip-field .ks-btn { width: 100%; }
 
 /* Keyboard dropdown (beside the node being edited) */
 .ks { position: relative; display: inline-block; }

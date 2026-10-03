@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 /**
  * A dropdown made for the keyboard (used beside the node you're editing). Unlike the browser's
  * <select>, it never opens a native menu that swallows keys, so Esc / ← / → always behave.
- *   ↑ / ↓ change the value · type a letter to jump · Space opens the list · Backspace clears
+ *   Enter / Space open the list · type a letter to jump · Backspace clears (↑ / ↓ move between fields)
  *   In the open list: ↑ / ↓ move, Enter / Space pick, Esc closes the list only.
  */
 export function KeySelect({ value, options, onChange, label }: {
@@ -16,7 +16,13 @@ export function KeySelect({ value, options, onChange, label }: {
   const all = ['', ...options, ...(stray ? [value] : [])];
   const index = Math.max(0, all.indexOf(value));
   const [open, setOpen] = useState(false);
-  const [hi, setHi] = useState(index);
+  const [hi, setHiState] = useState(index);
+  // Mirrored in a ref so fast key sequences (↓ then Enter in one go) always act on the latest highlight.
+  const hiRef = useRef(index);
+  const setHi = (next: number | ((h: number) => number)) => {
+    hiRef.current = typeof next === 'function' ? next(hiRef.current) : next;
+    setHiState(hiRef.current);
+  };
   const typed = useRef({ text: '', at: 0 });
 
   const show = (o: string) => (o === '' ? '—' : o === value && stray ? `${o} (not in list)` : o);
@@ -30,16 +36,12 @@ export function KeySelect({ value, options, onChange, label }: {
       if (['ArrowDown', 'ArrowUp', 'Enter', ' ', 'Escape'].includes(k)) e.stopPropagation(); // Tab still moves to the next field
       if (k === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(all.length - 1, h + 1)); }
       else if (k === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(0, h - 1)); }
-      else if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(all[hi]); }
+      else if (k === 'Enter' || k === ' ') { e.preventDefault(); pick(all[hiRef.current]); }
       else if (k === 'Escape') { e.preventDefault(); setOpen(false); }
       else if (k === 'Tab') setOpen(false);
       return;
     }
-    if (k === 'ArrowDown' || k === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      onChange(all[(index + (k === 'ArrowDown' ? 1 : -1) + all.length) % all.length]);
-    } else if (k === ' ' || (k === 'ArrowDown' && e.altKey)) {
+    if (k === 'Enter' || k === ' ' || (k === 'ArrowDown' && e.altKey)) {
       e.preventDefault();
       e.stopPropagation();
       openList();

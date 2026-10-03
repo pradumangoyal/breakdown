@@ -167,7 +167,7 @@ function KeyHelp() {
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
             <dt>⌘↑ / ⌘↓</dt><dd>Collapse / expand</dd>
             <dt>⌫</dt><dd>Delete with children</dd>
-            <dt>→ at the end of the text</dt><dd>Into the node's attribute fields (shown beside it while editing); → / ← move along, ← back to the text</dd>
+            <dt>→ at the end of the text</dt><dd>Into the node's attribute fields (a list beside it while editing): ↑ / ↓ between fields, ← back to the text, Enter on a dropdown opens it</dd>
             <dt>I / ⌘I (Ctrl+I)</dt><dd>Edit the node starting in its first attribute field</dd>
             <dt>Esc</dt><dd>Stop editing · again: deselect · again: leave focus mode</dd>
           </dl>
@@ -182,7 +182,7 @@ function KeyHelp() {
             <dt>Drag the bullet</dt><dd>Move the item (onto a row: under it)</dd>
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
             <dt>⌘↑ / ⌘↓</dt><dd>Collapse / expand</dd>
-            <dt>→ at the end · ⌘I</dt><dd>Into the row's attribute fields (↑↓ from a field: other rows)</dd>
+            <dt>→ at the end · ⌘I</dt><dd>Into the row's attribute fields (listed under the row): ↑ / ↓ between fields, ↓ past the last: next row</dd>
             <dt>Esc</dt><dd>Stop editing (↑↓ move, ⇧Enter edit, I edit attributes, Esc deselect)</dd>
             <dt>⌫ on empty</dt><dd>Delete item</dd>
           </dl>
