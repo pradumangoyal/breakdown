@@ -65,7 +65,17 @@ export function AttrStrip({ nodeId, className = '', style, onBack, onEnter, onEs
   };
 
   return (
-    <div className={`attr-strip ${className}`} style={style} data-node={nodeId} onKeyDown={onKeyDown} onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      className={`attr-strip ${className}`}
+      style={style}
+      data-node={nodeId}
+      onKeyDown={onKeyDown}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+        // A click on the panel itself (padding, a label) must not move focus away and end the edit.
+        if (!(e.target as Element).closest('input, select, textarea, button')) e.preventDefault();
+      }}
+    >
       {fields.map((a) => (
         <label key={a.id} className="attr-strip-field" title={describeScope(doc, a)}>
           <span>{a.name}</span>

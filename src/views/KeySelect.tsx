@@ -71,7 +71,16 @@ export function KeySelect({ value, options, onChange, label }: {
         aria-expanded={open}
         className={`ks-btn${value === '' ? ' unset' : ''}${stray ? ' stray' : ''}`}
         onKeyDown={onKeyDown}
-        onClick={() => (open ? setOpen(false) : openList())}
+        // Open on mouse *down* and focus it ourselves: Safari / Firefox don't focus a clicked button,
+        // which would otherwise look like "focus left the node" and end the edit before the list opens.
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.focus({ preventScroll: true });
+          if (open) setOpen(false);
+          else openList();
+        }}
+        // Clicks that don't come from a mouse (assistive tech, Space key-up) just open it.
+        onClick={(e) => { if (e.detail === 0) openList(); }}
         onBlur={() => setOpen(false)}
       >
         <span>{show(value)}</span>
