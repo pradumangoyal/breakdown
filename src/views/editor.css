@@ -222,16 +222,26 @@ select.stray { color: var(--warn); }
 .sp-editor textarea, .sp-editor input, .sp-editor select { display: block; width: 100%; min-height: inherit; border: 0; outline: none; resize: none; overflow: hidden; font: 12px/1.35 Arial, sans-serif; padding: 2px 6px; background: transparent; white-space: pre-wrap; }
 .sp-editor select { cursor: pointer; padding: 2px 3px; }
 
-/* Inline attribute editor (⌘I / Ctrl+I) */
-.attr-pop { background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 10px 28px rgba(16, 24, 40, .18); padding: 8px 10px 10px; min-width: 260px; max-width: 340px; font-size: 13px; outline: none; }
-.attr-pop.on-map { position: absolute; z-index: 15; }
-.attr-pop.in-outline { margin: 2px 8px 8px; }
-.attr-pop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-.attr-pop-head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attr-pop-head span { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.attr-pop-field { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; margin-top: 5px; }
-.attr-pop-field span { color: #344054; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.attr-pop-field input, .attr-pop-field select { font: inherit; font-size: 13px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 4px 6px; min-width: 0; background: var(--panel); }
-.attr-pop-field input:focus, .attr-pop-field select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
-.attr-pop-none { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-.attr-pop-none kbd { font: inherit; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+/* Attribute fields beside the node being edited (→ at the end of the text moves into them) */
+.mm-edit { display: contents; }
+.attr-strip { display: flex; gap: 6px; align-items: flex-end; font-weight: 400; font-size: 12px; }
+.attr-strip.on-map { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); z-index: 6; padding: 6px 8px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 8px 22px rgba(16, 24, 40, .16); white-space: nowrap; color: var(--ink); }
+.attr-strip.on-map::before { content: ''; position: absolute; left: -15px; top: 50%; width: 14px; border-top: 2px dashed var(--accent); }
+.attr-strip.in-row { flex: none; margin-top: 1px; max-width: 70%; overflow-x: auto; }
+.attr-strip-field { display: flex; flex-direction: column; gap: 1px; }
+.attr-strip-field span { font-size: 10px; color: var(--muted); padding-left: 2px; white-space: nowrap; }
+.attr-strip-field input, .attr-strip-field select { font: inherit; font-size: 12px; width: 120px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 3px 6px; background: #fff; color: var(--ink); }
+.attr-strip-field input:focus, .attr-strip-field select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+/* Keyboard dropdown (beside the node being edited) */
+.ks { position: relative; display: inline-block; }
+.ks-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 120px; font: inherit; font-size: 12px; text-align: left; border: 1px solid var(--line-strong); border-radius: 5px; padding: 3px 6px; background: #fff; color: var(--ink); cursor: pointer; }
+.ks-btn span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ks-btn:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.ks-btn.unset { color: var(--muted); }
+.ks-btn.stray { color: var(--warn); }
+.ks-caret { color: var(--muted); font-size: 10px; }
+.ks-list { position: absolute; left: 0; top: calc(100% + 2px); z-index: 20; min-width: 100%; max-height: 220px; overflow: auto; margin: 0; padding: 3px; list-style: none; background: #fff; border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: 0 8px 22px rgba(16, 24, 40, .16); }
+.ks-list li { padding: 4px 8px; border-radius: 4px; white-space: nowrap; cursor: pointer; }
+.ks-list li.hi { background: var(--accent-soft); }
+.ks-list li.cur { font-weight: 600; }

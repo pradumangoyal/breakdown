@@ -8,8 +8,8 @@ import type { AttrDef, Node } from '../model/types';
 import { levelName } from '../export/grid';
 import { H_GAP, PAD, layoutMap, type Box, type Size } from './layout';
 import { AutoTextarea, insertLineBreak } from './AutoTextarea';
-import { AttrPopover } from './AttrPopover';
-import { isAttrKey, useUi } from '../model/ui';
+import { AttrStrip, caretAtEnd, focusField, stripFields } from './AttrStrip';
+import { isAttrKey } from '../model/ui';
 
 const BRANCH_COLORS = ['#2f6fdf', '#d9480f', '#2b8a3e', '#9c36b5', '#c2255c', '#0c8599', '#e67700', '#5f3dc4'];
 const colorOf = (b: number) => (b < 0 ? '#495057' : BRANCH_COLORS[b % BRANCH_COLORS.length]);
@@ -79,12 +79,8 @@ export function MapView() {
   const [arrange, setArrange] = usePref('mindmap.arrange', 'columns', ['columns', 'compact'] as const);
   /** Attribute values inside the nodes (layout makes room) or just a count badge. */
   const [values, setValues] = usePref('mindmap.values', 'shown', ['shown', 'count'] as const);
-  /** Inline attribute editor below a node (⌘I / I); re-positioned when you pan or zoom. */
-  const attrPop = useUi((s) => (s.attrPop?.from === 'map' ? s.attrPop : null));
-  const attrPopOpen = useRef(false);
-  attrPopOpen.current = !!attrPop;
-  const [, setZoomTick] = useState(0);
-  useEffect(() => () => { if (useUi.getState().attrPop?.from === 'map') useUi.getState().closeAttrPop(); }, []);
+  /** ⌘I / I on a selected node: start editing it with the cursor in its first attribute field. */
+  const fieldsFirst = useRef<string | null>(null);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -157,7 +153,6 @@ export function MapView() {
       .on('zoom', (e) => {
         const t = e.transform;
         canvasRef.current!.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.k})`;
-        if (attrPopOpen.current) setZoomTick((n) => n + 1); // keep the attribute editor under its node
       });
     z.clickDistance(4);
     sel.call(z).on('dblclick.zoom', null);
@@ -278,8 +273,20 @@ export function MapView() {
     window.addEventListener('keydown', onEsc, true);
   }, []);
 
+  /** Pan just enough to bring an element (the attribute fields beside an edited node) on screen. */
+  const reveal = useCallback((el: Element) => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const r = el.getBoundingClientRect();
+    const v = vp.getBoundingClientRect();
+    const dx = r.right > v.right - 16 ? v.right - 16 - r.right : 0;
+    const dy = r.bottom > v.bottom - 40 ? v.bottom - 40 - r.bottom : 0;
+    if (dx || dy) zoomRef.current!.translateBy(select(vp), dx / zoomTransform(vp).k, dy / zoomTransform(vp).k);
+  }, []);
+
   const startNew = useCallback((id: string) => {
     freshRef.current = id;
+    fieldsFirst.current = null;
     useEditor.getState().setEditing(id);
   }, []);
 
@@ -289,8 +296,8 @@ export function MapView() {
     const isFresh = freshRef.current === id;
     if (s.doc.nodes[id] && value !== s.doc.nodes[id].text) s.setText(id, value);
     freshRef.current = null;
+    fieldsFirst.current = null;
     if (isFresh && value.trim() === '') s.discardNew(id); // nothing written: no stray "Untitled"
-    else if (how === 'attrs') { s.setEditing(null); useUi.getState().openAttrPop(id, 'map'); return; }
     else if (how === 'tab') return startNew(s.addChild(id));
     else if (how === 'enter' && isFresh) return startNew(s.addSibling(id)); // keep writing siblings
     s.setEditing(null);
@@ -315,8 +322,8 @@ export function MapView() {
     else if (isMod(e) && e.key.toLowerCase() === 'y') s.redo();
     else if (e.key === 'Tab' && !e.shiftKey) startNew(s.addChild(id));
     else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) startNew(s.addSibling(id)); // same as the outline: Enter = new item
-    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; s.setEditing(id); } // Shift+Enter / Ctrl+Enter edit
-    else if (isAttrKey(e) || (e.key.toLowerCase() === 'i' && !isMod(e) && !e.altKey)) useUi.getState().openAttrPop(id, 'map');
+    else if (e.key === 'Enter' || e.key === 'F2' || e.key === ' ') { freshRef.current = null; fieldsFirst.current = null; s.setEditing(id); } // Shift+Enter / Ctrl+Enter edit
+    else if (isAttrKey(e) || (e.key.toLowerCase() === 'i' && !isMod(e) && !e.altKey)) { freshRef.current = null; fieldsFirst.current = id; s.setEditing(id); }
     else if (e.key === 'Escape') s.select('', 'map'); // deselect: also clears the path highlight
     else if ((e.key === 'Backspace' || e.key === 'Delete') && parent) s.remove(id);
     else if (e.altKey && e.key === 'ArrowUp') s.move(id, -1);
@@ -395,6 +402,8 @@ export function MapView() {
             dragging={drag?.id === id}
             dropInside={drag?.target?.id === id && drag.target.zone === 'inside'}
             beginDrag={beginDrag}
+            reveal={reveal}
+            fieldsFirst={id === editingId && fieldsFirst.current === id}
             register={register}
             finish={finish}
           />
@@ -406,24 +415,6 @@ export function MapView() {
           <span>{drag.target ? (drag.target.zone === 'inside' ? 'move under' : drag.target.zone === 'before' ? 'place above' : 'place below') : 'drop on a node'}</span>
         </div>
       )}
-      {attrPop && layout.boxes.has(attrPop.id) && (() => {
-        const vp = viewportRef.current;
-        const b = layout.boxes.get(attrPop.id)!;
-        const t = vp ? zoomTransform(vp) : zoomIdentity;
-        const left = Math.max(8, t.x + b.x * t.k);
-        const below = t.y + (b.y + b.h) * t.k + 8;
-        // Near the bottom edge: open above the node instead.
-        const flip = vp ? below + 220 > vp.clientHeight : false;
-        const style = flip ? { left, bottom: (vp?.clientHeight ?? 0) - (t.y + b.y * t.k) + 8 } : { left, top: below };
-        return (
-          <AttrPopover
-            nodeId={attrPop.id}
-            className="on-map"
-            style={style}
-            onClose={() => { useUi.getState().closeAttrPop(); viewportRef.current?.focus({ preventScroll: true }); }}
-          />
-        );
-      })()}
       <div className="mm-tools">
         <button className={values === 'shown' ? 'on' : ''} aria-pressed={values === 'shown'} title="Show attribute values inside the nodes (off: just a count)" onClick={() => setValues(values === 'shown' ? 'count' : 'shown')}>Values</button>
         <button className={arrange === 'columns' ? 'on' : ''} aria-pressed={arrange === 'columns'} title="Line up each level in its own column, like the Sheet" onClick={() => setArrange(arrange === 'columns' ? 'compact' : 'columns')}>Columns</button>
@@ -474,11 +465,14 @@ interface MapNodeProps {
   dragging: boolean;
   dropInside: boolean;
   beginDrag: (id: string, x: number, y: number) => void;
+  reveal: (el: Element) => void;
+  /** Editing was started with ⌘I / I: put the cursor in the first attribute field. */
+  fieldsFirst: boolean;
   register: (id: string, el: HTMLDivElement | null) => void;
   finish: (id: string, value: string, how: EditEnd) => void;
 }
 
-const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, attrNames, shown, showValues, dragging, dropInside, beginDrag, register, finish }: MapNodeProps) {
+const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selected, dim, editing, attrNames, shown, showValues, dragging, dropInside, beginDrag, reveal, fieldsFirst, register, finish }: MapNodeProps) {
   const ref = useCallback((el: HTMLDivElement | null) => register(node.id, el), [node.id, register]);
   const chips = shown ? shown.split(',').map((k) => [k, node.attrs[k]] as const) : [];
   const cls = `mm-node ${depth === 0 ? 'd0' : depth === 1 ? 'd1' : 'dn'}${selected ? ' sel' : ''}${editing ? ' editing' : ''}${dim ? ' dim' : ''}${dragging ? ' dragging' : ''}${dropInside ? ' drop-inside' : ''}`;
@@ -499,11 +493,11 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
       onDoubleClick={() => useEditor.getState().setEditing(node.id)}
     >
       <div className="mm-row">
-        {editing ? <InlineEdit node={node} finish={finish} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
+        {editing ? <InlineEdit node={node} finish={finish} reveal={reveal} fieldsFirst={fieldsFirst} /> : <div className="mm-text">{node.text || <span className="mm-empty">Untitled</span>}</div>}
         {!showValues && chips.length > 0 && <span className="mm-badge" title={summary.join('\n')}>{chips.length}</span>}
       </div>
       {/* Values live inside the node, so the layout makes room and nothing is ever covered. */}
-      {showValues && chips.length > 0 && (
+      {showValues && !editing && chips.length > 0 && (
         <div className="mm-chips">
           {summary.map((line) => <span key={line} className="chip">{line}</span>)}
         </div>
@@ -522,15 +516,25 @@ const MapNode = memo(function MapNode({ node, box, depth, color, hidden, selecte
   );
 });
 
-type EditEnd = 'enter' | 'tab' | 'escape' | 'blur' | 'attrs';
+type EditEnd = 'enter' | 'tab' | 'escape' | 'blur';
 
-function InlineEdit({ node, finish }: { node: Node; finish: (id: string, value: string, how: EditEnd) => void }) {
+function InlineEdit({ node, finish, reveal, fieldsFirst }: {
+  node: Node;
+  finish: (id: string, value: string, how: EditEnd) => void;
+  reveal: (el: Element) => void;
+  fieldsFirst: boolean;
+}) {
   const [value, setValue] = useState(node.text);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
   const done = useRef(false);
+  const strip = () => groupRef.current?.querySelector('.attr-strip');
 
   useLayoutEffect(() => {
     const el = inputRef.current!;
+    const s = strip();
+    if (s) reveal(s); // the fields beside the node should be on screen too
+    if (fieldsFirst && focusField(stripFields(s)[0], 'start')) return;
     el.focus({ preventScroll: true });
     el.setSelectionRange(el.value.length, el.value.length); // cursor at the end: you're editing, not replacing
   }, []);
@@ -540,24 +544,39 @@ function InlineEdit({ node, finish }: { node: Node; finish: (id: string, value: 
     done.current = true;
     finish(node.id, value, how);
   };
+  const backToText = () => {
+    const el = inputRef.current!;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+  };
 
   return (
-    <AutoTextarea
-      ref={inputRef}
-      className="mm-input"
-      value={value}
-      cols={Math.max(6, ...value.split('\n').map((l) => l.length + 1))}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => end('blur')}
-      onMouseDown={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (isAttrKey(e)) { e.preventDefault(); end('attrs'); } // ⌘I / Ctrl+I: save the text, edit this node's attributes
-        else if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); insertLineBreak(e.currentTarget); } // Ctrl+Enter = line break
-        else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); end('enter'); } // Shift+Enter = line break (textarea default)
-        else if (e.key === 'Escape') { e.preventDefault(); end('escape'); }
-        else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); end('tab'); }
-      }}
-    />
+    // The text and its attribute fields are one editing group: moving between them keeps you
+    // editing; focus leaving the group (a click elsewhere) finishes the edit.
+    <div
+      className="mm-edit"
+      ref={groupRef}
+      onBlur={(e) => { if (!groupRef.current?.contains(e.relatedTarget as Element | null)) end('blur'); }}
+    >
+      <AutoTextarea
+        ref={inputRef}
+        className="mm-input"
+        value={value}
+        cols={Math.max(6, ...value.split('\n').map((l) => l.length + 1))}
+        onChange={(e) => setValue(e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          const toFields = () => focusField(stripFields(strip())[0], 'start');
+          if (e.key === 'ArrowRight' && caretAtEnd(e.currentTarget) && toFields()) e.preventDefault(); // → at the end: into the attributes
+          else if (isAttrKey(e)) { e.preventDefault(); toFields(); }
+          else if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); insertLineBreak(e.currentTarget); } // Ctrl+Enter = line break
+          else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); end('enter'); } // Shift+Enter = line break (textarea default)
+          else if (e.key === 'Escape') { e.preventDefault(); end('escape'); }
+          else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); end('tab'); }
+        }}
+      />
+      <AttrStrip nodeId={node.id} className="on-map" onBack={backToText} onEnter={() => end('enter')} onEscape={() => end('escape')} />
+    </div>
   );
 }

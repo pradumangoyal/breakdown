@@ -13,15 +13,11 @@ interface UiState {
   attrsOpen: boolean;
   focus: boolean;
   helpOpen: boolean;
-  /** Inline attribute editor (⌘I / Ctrl+I): which node, opened from the map or the outline. */
-  attrPop: { id: string; from: 'map' | 'outline'; resume: 'edit' | 'select' } | null;
   setView(v: MainView): void;
   toggleOutline(): void;
   toggleAttrs(): void;
   setFocus(on: boolean): void;
   toggleHelp(): void;
-  openAttrPop(id: string, from: 'map' | 'outline', resume?: 'edit' | 'select'): void;
-  closeAttrPop(): void;
 }
 
 const KEY = 'mindmap.ui.v1';
@@ -41,17 +37,14 @@ export const useUi = create<UiState>()((set) => ({
   ...load(),
   focus: false,
   helpOpen: false,
-  attrPop: null,
   setView: (view) => set({ view }),
   toggleOutline: () => set((s) => ({ outlineOpen: !s.outlineOpen })),
   toggleAttrs: () => set((s) => ({ attrsOpen: !s.attrsOpen })),
   setFocus: (focus) => set({ focus, helpOpen: false }),
   toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen })),
-  openAttrPop: (id, from, resume = 'select') => set({ attrPop: { id, from, resume } }),
-  closeAttrPop: () => set({ attrPop: null }),
 }));
 
-/** ⌘I on Mac, Ctrl+I elsewhere (I alone also works when you're not typing). */
+/** ⌘I on Mac, Ctrl+I elsewhere: jump into the attribute fields of the node you're editing. */
 export const isAttrKey = (e: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean }) =>
   e.key.toLowerCase() === 'i' && (e.metaKey || e.ctrlKey) && !e.altKey;
 

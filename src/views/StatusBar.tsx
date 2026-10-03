@@ -10,7 +10,7 @@ function useFocusKind() {
     const read = () => {
       const el = document.activeElement;
       setKind(
-        el?.closest('.attr-pop') ? 'attrs-edit'
+        el?.closest('.attr-strip') ? 'attrs-edit'
         : el?.closest('.sp-editor') ? 'sheet-edit'
         : el?.classList.contains('mm-input') ? 'map-edit'
         : el?.classList.contains('ol-input') ? 'outline-edit'
@@ -30,13 +30,13 @@ function useFocusKind() {
 }
 
 const HINTS: Record<Mode, string[]> = {
-  'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', '⇧⇧ attributes', 'Esc stop editing'],
-  'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', '⇧⇧ attributes', 'Esc stop editing'],
+  'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', '→ at end: attributes', 'Esc stop editing'],
+  'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', '→ at end: attributes', 'Esc stop editing'],
   'table-edit': ['Tab next cell', 'Enter next row', 'Esc leave cell'],
-  'attrs-edit': ['Tab / ↑↓ next field', 'Enter / Esc / ⇧⇧ done'],
+  'attrs-edit': ['→ / ← next / previous field', '← from the first: back to the text', 'Enter done', 'Esc stop editing'],
   'sheet-edit': ['Enter save', 'Tab / ⇧Tab next / previous cell', '⇧Enter / ⌃Enter new line', 'Esc cancel'],
-  'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', '⇧⇧ attributes', '↑↓←→ move', 'Esc deselect'],
-  'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', '⇧⇧ attributes', 'Esc deselect'],
+  'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', 'I attributes', '↑↓←→ move', 'Esc deselect'],
+  'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', 'I attributes', 'Esc deselect'],
   selected: ['Click into the map or outline to use the keyboard'],
   none: ['Click a node, or press ↓ on the map'],
 };

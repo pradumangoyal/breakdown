@@ -45,47 +45,6 @@ export function Editor({ mapId, goHome, open }: { mapId: string; goHome: () => v
     return () => flushSave(); // leaving the map: write any last edit right away
   }, [mapId]);
 
-  // Double-tap Shift (⇧⇧): open the attribute editor for the current node (again: close it).
-  // Works while typing too. Only two quick, clean taps count (Shift+letter, ⇧Tab, ⇧Enter don't).
-  useEffect(() => {
-    let downAt = 0;
-    let lastTap = 0;
-    let other = false;
-    const trigger = () => {
-      const el = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
-      if (el?.closest('.attr-pop')) {
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-        return;
-      }
-      // Same path as ⌘I, so the map / outline decide (and e.g. save the text you were typing first).
-      if (el && el.closest('.mm-viewport, .ol')) {
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, ctrlKey: true, bubbles: true, cancelable: true }));
-        return;
-      }
-      const sel = useEditor.getState().selectedId;
-      if (useUi.getState().view === 'map' && sel) useUi.getState().openAttrPop(sel, 'map');
-    };
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') { if (!e.repeat) { downAt = performance.now(); other = false; } }
-      else { other = true; lastTap = 0; }
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.key !== 'Shift') return;
-      const now = performance.now();
-      if (other || now - downAt > 300) { lastTap = 0; return; }
-      if (now - lastTap < 400) { lastTap = 0; trigger(); } else lastTap = now;
-    };
-    const reset = () => { lastTap = 0; };
-    document.addEventListener('keydown', down, true);
-    document.addEventListener('keyup', up, true);
-    document.addEventListener('mousedown', reset, true);
-    return () => {
-      document.removeEventListener('keydown', down, true);
-      document.removeEventListener('keyup', up, true);
-      document.removeEventListener('mousedown', reset, true);
-    };
-  }, []);
-
   // Single-key shortcuts when you're not typing: O outline, A attributes, F focus mode, ? keys.
   // Esc with nothing selected leaves focus mode (map / outline handle Esc first: stop editing, deselect).
   useEffect(() => {
@@ -208,7 +167,8 @@ function KeyHelp() {
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
             <dt>⌘↑ / ⌘↓</dt><dd>Collapse / expand</dd>
             <dt>⌫</dt><dd>Delete with children</dd>
-            <dt>⇧⇧ (tap Shift twice) · ⌘I · I</dt><dd>Edit this node's attributes, right below it (Tab between fields, Enter / Esc done)</dd>
+            <dt>→ at the end of the text</dt><dd>Into the node's attribute fields (shown beside it while editing); → / ← move along, ← back to the text</dd>
+            <dt>I / ⌘I (Ctrl+I)</dt><dd>Edit the node starting in its first attribute field</dd>
             <dt>Esc</dt><dd>Stop editing · again: deselect · again: leave focus mode</dd>
           </dl>
         </div>
@@ -222,8 +182,8 @@ function KeyHelp() {
             <dt>Drag the bullet</dt><dd>Move the item (onto a row: under it)</dd>
             <dt>⌥↑ / ⌥↓</dt><dd>Move up / down</dd>
             <dt>⌘↑ / ⌘↓</dt><dd>Collapse / expand</dd>
-            <dt>⇧⇧ · ⌘I / Ctrl+I</dt><dd>Edit this row's attributes, right below it</dd>
-            <dt>Esc</dt><dd>Stop editing (↑↓ move, ⇧Enter edit, I attributes, Esc deselect)</dd>
+            <dt>→ at the end · ⌘I</dt><dd>Into the row's attribute fields (↑↓ from a field: other rows)</dd>
+            <dt>Esc</dt><dd>Stop editing (↑↓ move, ⇧Enter edit, I edit attributes, Esc deselect)</dd>
             <dt>⌫ on empty</dt><dd>Delete item</dd>
           </dl>
           <h4 style={{ marginTop: 12 }}>Anywhere (not typing)</h4>
