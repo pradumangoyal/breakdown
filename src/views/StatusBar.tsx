@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEditor } from '../model/store';
 
-type Mode = 'map-edit' | 'outline-edit' | 'table-edit' | 'selected-map' | 'selected-outline' | 'selected' | 'none';
+type Mode = 'map-edit' | 'outline-edit' | 'table-edit' | 'sheet-edit' | 'selected-map' | 'selected-outline' | 'selected' | 'none';
 
 /** What has keyboard focus right now (read from the DOM, so it is always truthful). */
 function useFocusKind() {
@@ -10,7 +10,8 @@ function useFocusKind() {
     const read = () => {
       const el = document.activeElement;
       setKind(
-        el?.classList.contains('mm-input') ? 'map-edit'
+        el?.closest('.sp-editor') ? 'sheet-edit'
+        : el?.classList.contains('mm-input') ? 'map-edit'
         : el?.classList.contains('ol-input') ? 'outline-edit'
         : el?.closest('.tv td') ? 'table-edit'
         : el?.classList.contains('mm-viewport') ? 'map'
@@ -31,6 +32,7 @@ const HINTS: Record<Mode, string[]> = {
   'map-edit': ['Enter finish', '⇧Enter / ⌃Enter new line', 'Tab add child', 'Esc stop editing'],
   'outline-edit': ['Enter new item', '⇧Enter / ⌃Enter new line', 'Tab indent', 'Esc stop editing'],
   'table-edit': ['Tab next cell', 'Enter next row', 'Esc leave cell'],
+  'sheet-edit': ['Enter save', 'Tab / ⇧Tab next / previous cell', '⇧Enter / ⌃Enter new line', 'Esc cancel'],
   'selected-map': ['⇧Enter / F2 edit', 'Enter add sibling', 'Tab add child', '↑↓←→ move', 'Esc deselect'],
   'selected-outline': ['⇧Enter / F2 edit', 'Enter add item', '↑↓ move', 'Tab indent', 'Esc deselect'],
   selected: ['Click into the map or outline to use the keyboard'],
@@ -44,7 +46,7 @@ export function StatusBar() {
   const node = doc.nodes[selectedId];
 
   const mode: Mode =
-    focus === 'map-edit' || focus === 'outline-edit' || focus === 'table-edit' ? focus
+    focus === 'map-edit' || focus === 'outline-edit' || focus === 'table-edit' || focus === 'sheet-edit' ? focus
     : !node ? 'none'
     : focus === 'map' ? 'selected-map'
     : focus === 'outline' ? 'selected-outline'
@@ -54,6 +56,7 @@ export function StatusBar() {
   const label =
     mode === 'none' ? 'Nothing selected'
     : mode === 'table-edit' ? `✎ Editing values · ${name}`
+    : mode === 'sheet-edit' ? '✎ Editing the Sheet'
     : editing ? `✎ Editing · ${name}`
     : `Selected · ${name}`;
 

@@ -3,6 +3,7 @@ import { useEditor } from '../model/store';
 import { indexTree } from '../model/tree';
 import { describeScope, levelName, scopeTester } from '../model/scope';
 import { AttrForm } from './AttrForm';
+import { AttrValueInput } from './AttrValueInput';
 
 const filled = (v: unknown) => v !== undefined && String(v).trim() !== '';
 
@@ -51,10 +52,10 @@ export function AttributePanel() {
         {here.map((a) => (
           <label key={a.id} className="ap-field">
             <span title={describeScope(doc, a)}>{a.name}{a.type === 'number' && <em> #</em>}</span>
-            <input
-              value={node.attrs[a.id] ?? ''}
-              inputMode={a.type === 'number' ? 'decimal' : undefined}
-              onChange={(e) => s().setAttr(node.id, a.id, e.target.value)}
+            <AttrValueInput
+              def={a}
+              value={node.attrs[a.id]}
+              onValue={(v) => s().setAttr(node.id, a.id, v)}
               onFocus={() => s().setFocusArea('map')}
             />
           </label>
@@ -82,14 +83,14 @@ export function AttributePanel() {
               key={a.id}
               doc={doc}
               attr={a}
-              onSave={(name, type, scope) => { s().updateAttribute(a.id, { name, type, scope }); setEditing(null); }}
+              onSave={(name, type, scope, options) => { s().updateAttribute(a.id, { name, type, scope, options }); setEditing(null); }}
               onCancel={() => setEditing(null)}
               onDelete={() => remove(a.id)}
             />
           ) : (
             <div key={a.id} className="ap-attr">
               <div className="ap-attr-main">
-                <strong>{a.name}</strong>{a.type === 'number' && <em> #</em>}
+                <strong>{a.name}</strong>{a.type === 'number' && <em> #</em>}{a.type === 'select' && <em> ▾ {(a.options ?? []).length} choices</em>}
                 <span>{describeScope(doc, a)}</span>
               </div>
               <div className="ap-attr-tools">
@@ -103,7 +104,7 @@ export function AttributePanel() {
         {editing === 'new' ? (
           <AttrForm
             doc={doc}
-            onSave={(name, type, scope) => { s().addAttribute(name, type, scope); setEditing(null); }}
+            onSave={(name, type, scope, options) => { s().addAttribute(name, type, scope, options); setEditing(null); }}
             onCancel={() => setEditing(null)}
           />
         ) : (

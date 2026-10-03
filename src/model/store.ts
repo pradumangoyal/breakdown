@@ -44,7 +44,7 @@ interface EditorActions {
   setText(id: string, text: string): void;
   toggle(id: string, collapsed?: boolean): void;
   setAttr(id: string, attrId: string, value: AttrValue | undefined): void;
-  addAttribute(name: string, type?: 'text' | 'number', scope?: AttrScope): string;
+  addAttribute(name: string, type?: AttrDef['type'], scope?: AttrScope, options?: string[]): string;
   updateAttribute(id: string, patch: Partial<Omit<AttrDef, 'id'>>): void;
   removeAttribute(id: string): void;
   moveAttribute(id: string, delta: -1 | 1): void;
@@ -150,9 +150,9 @@ export const useEditor = create<EditorState & EditorActions>()((set, get) => {
     setText: (id, text) => apply((d) => T.setText(d, id, text), `text:${id}`),
     toggle: (id, collapsed) => apply((d) => T.setCollapsed(d, id, collapsed ?? !d.nodes[id].collapsed)),
     setAttr: (id, attrId, value) => apply((d) => T.setAttr(d, id, attrId, value), `attr:${id}:${attrId}`),
-    addAttribute: (name, type, scope) => {
+    addAttribute: (name, type, scope, options) => {
       let attrId = '';
-      apply((d) => { attrId = T.addAttribute(d, name, type, scope); });
+      apply((d) => { attrId = T.addAttribute(d, name, type, scope, options); });
       return attrId;
     },
     updateAttribute: (id, patch) => apply((d) => T.updateAttribute(d, id, patch)),

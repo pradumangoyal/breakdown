@@ -15,8 +15,16 @@ export function gridToHtml(grid: Grid): string {
         .map((cell, c) => {
           if (cell.kind === 'covered') return '';
           const span = anchors.get(`${r}:${c}`);
+          // Editable cells carry what they edit: node text, an attribute value, or a level's column name.
+          const col = grid.columns[c];
+          const edit =
+            (cell.kind === 'node' || cell.kind === 'title') && cell.nodeId ? `data-edit data-node="${cell.nodeId}"`
+            : cell.attrId && cell.nodeId ? `data-edit data-node="${cell.nodeId}" data-attr="${cell.attrId}"`
+            : cell.kind === 'header' && col?.kind === 'level' ? `data-edit data-level="${col.level}"`
+            : '';
           const attrs = [
             `class="k-${cell.kind}${cell.depth ? ` d-${Math.min(cell.depth, 6)}` : ''}"`,
+            edit,
             span && span.rs > 1 ? `rowspan="${span.rs}"` : '',
             span && span.cs > 1 ? `colspan="${span.cs}"` : '',
           ].filter(Boolean).join(' ');

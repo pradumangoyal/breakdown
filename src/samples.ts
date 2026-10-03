@@ -106,7 +106,7 @@ export function wbs(): MapDoc {
       attributes: [
         { name: 'Owner', scope: { nodes: 'levels', levels: [1] } },
         { name: 'Budget (₹k)', type: 'number', scope: { nodes: 'levels', levels: [2] } },
-        { name: 'Status', scope: { nodes: 'end' } },
+        { name: 'Status', type: 'select', options: ['To do', 'WIP', 'Done', 'Blocked'], scope: { nodes: 'end' } },
         { name: 'POC', scope: { nodes: 'end' } },
         { name: 'Remark', scope: { nodes: 'end' } },
         { name: 'Sponsor', scope: { nodes: 'levels', levels: [0] } },

@@ -126,13 +126,22 @@ export function setAttr(doc: MapDoc, id: string, attrId: string, value: AttrValu
 }
 
 /** Registers an attribute (or returns the existing one with the same name). */
-export function addAttribute(doc: MapDoc, name: string, type: AttrDef['type'] = 'text', scope?: AttrScope): string {
+export function addAttribute(doc: MapDoc, name: string, type: AttrDef['type'] = 'text', scope?: AttrScope, options?: string[]): string {
   const clean = name.trim();
   const existing = doc.attributes.find((a) => a.name.toLowerCase() === clean.toLowerCase());
   if (existing) return existing.id;
   const id = `a${Math.random().toString(36).slice(2, 8)}`;
-  doc.attributes.push(scope ? { id, name: clean, type, scope } : { id, name: clean, type });
+  const def: AttrDef = { id, name: clean, type };
+  if (scope) def.scope = scope;
+  if (type === 'select') def.options = cleanOptions(options ?? []);
+  doc.attributes.push(def);
   return id;
+}
+
+/** Trimmed, non-empty, no duplicates (case-insensitive), order kept. */
+export function cleanOptions(options: string[]): string[] {
+  const seen = new Set<string>();
+  return options.map((o) => o.trim()).filter((o) => o && !seen.has(o.toLowerCase()) && seen.add(o.toLowerCase()));
 }
 
 /** Rename / retype / rescope. Values are kept even if some nodes fall out of scope. */
@@ -142,6 +151,8 @@ export function updateAttribute(doc: MapDoc, id: string, patch: Partial<Omit<Att
   if (patch.name !== undefined && patch.name.trim()) a.name = patch.name.trim();
   if (patch.type) a.type = patch.type;
   if (patch.scope) a.scope = patch.scope;
+  if (a.type === 'select') a.options = cleanOptions(patch.options ?? a.options ?? []);
+  else delete a.options;
 }
 
 /** Deletes the attribute and its values on every node. */

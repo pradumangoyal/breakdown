@@ -11,7 +11,7 @@ export interface NodeSpec {
 
 export interface BuildOptions {
   /** Attribute definitions in column order; names used in specs but missing here are added as text. */
-  attributes?: Array<Pick<AttrDef, 'name'> & Partial<Pick<AttrDef, 'type'>> & { scope?: AttrScope }>;
+  attributes?: Array<Pick<AttrDef, 'name'> & Partial<Pick<AttrDef, 'type' | 'options'>> & { scope?: AttrScope }>;
   levelNames?: string[];
   numbering?: boolean;
 }
@@ -22,16 +22,19 @@ const newId = (prefix: string) => `${prefix}${(++seq).toString(36)}`;
 export function buildDoc(root: NodeSpec, opts: BuildOptions = {}): MapDoc {
   const attributes: AttrDef[] = [];
   const idByName = new Map<string, string>();
-  const ensureAttr = (name: string, type: AttrDef['type'] = 'text', scope?: AttrScope) => {
+  const ensureAttr = (name: string, type: AttrDef['type'] = 'text', scope?: AttrScope, options?: string[]) => {
     let id = idByName.get(name);
     if (!id) {
       id = newId('a');
       idByName.set(name, id);
-      attributes.push(scope ? { id, name, type, scope } : { id, name, type });
+      const def: AttrDef = { id, name, type };
+      if (scope) def.scope = scope;
+      if (options) def.options = options;
+      attributes.push(def);
     }
     return id;
   };
-  for (const a of opts.attributes ?? []) ensureAttr(a.name, a.type, a.scope);
+  for (const a of opts.attributes ?? []) ensureAttr(a.name, a.type, a.scope, a.options);
 
   const nodes: Record<string, Node> = {};
   const add = (spec: NodeSpec): string => {

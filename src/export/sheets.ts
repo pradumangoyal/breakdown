@@ -87,6 +87,21 @@ export function gridToSheets(grid: Grid): SheetsPayload {
     { updateDimensionProperties: { range: { sheetId: SHEET_ID, dimension: 'ROWS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 32 }, fields: 'pixelSize' } },
   ];
 
+  // Dropdown attributes stay dropdowns in the Sheet (the team keeps picking from the same list).
+  grid.columns.forEach((col, c) => {
+    if (!col.options?.length || grid.dataStart >= H) return;
+    requests.push({
+      setDataValidation: {
+        range: range(grid.dataStart, H + SPARE_ROWS, c, c + 1),
+        rule: {
+          condition: { type: 'ONE_OF_LIST', values: col.options.map((o) => ({ userEnteredValue: o })) },
+          showCustomUi: true,
+          strict: false, // warn on other values instead of rejecting them
+        },
+      },
+    });
+  });
+
   const metaRow = grid.rows.findIndex((r) => r[0]?.kind === 'meta');
   if (metaRow >= 0) {
     requests.push({

@@ -3,6 +3,7 @@ import { useEditor } from '../model/store';
 import { indexTree } from '../model/tree';
 import { describeScope, scopeTester } from '../model/scope';
 import type { AttrDef, Node } from '../model/types';
+import { AttrValueInput } from './AttrValueInput';
 
 const isMod = (e: React.KeyboardEvent) => e.metaKey || e.ctrlKey;
 
@@ -80,13 +81,13 @@ const TableRow = memo(function TableRow({ node, depth, row, attrs, scopeKey, sel
   const s = useEditor.getState;
   const select = () => { if (s().selectedId !== node.id || s().focusArea !== 'table') s().select(node.id, 'table'); };
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, col: number) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>, col: number) => {
     const move = (dir: 1 | -1) => {
       const table = e.currentTarget.closest('table')!;
-      const cells = [...table.querySelectorAll<HTMLInputElement>(`input[data-col="${col}"]`)];
+      const cells = [...table.querySelectorAll<HTMLInputElement | HTMLSelectElement>(`[data-col="${col}"]`)];
       const next = dir === 1 ? cells.find((c) => Number(c.dataset.row) > row) : cells.reverse().find((c) => Number(c.dataset.row) < row);
       next?.focus();
-      next?.select();
+      if (next instanceof HTMLInputElement) next.select();
     };
     if (isMod(e) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? s().redo() : s().undo()); }
     else if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'ArrowDown') { e.preventDefault(); move(1); }
@@ -115,12 +116,12 @@ const TableRow = memo(function TableRow({ node, depth, row, attrs, scopeKey, sel
       {attrs.map((a, col) =>
         scopeKey[col] === '1' ? (
           <td key={a.id} className={a.type === 'number' ? 'num' : ''}>
-            <input
+            <AttrValueInput
+              def={a}
               data-row={row}
               data-col={col}
-              value={node.attrs[a.id] ?? ''}
-              inputMode={a.type === 'number' ? 'decimal' : undefined}
-              onChange={(e) => s().setAttr(node.id, a.id, e.target.value)}
+              value={node.attrs[a.id]}
+              onValue={(v) => s().setAttr(node.id, a.id, v)}
               onFocus={select}
               onKeyDown={(e) => onKeyDown(e, col)}
               aria-label={`${a.name} for ${node.text || 'Untitled'}`}

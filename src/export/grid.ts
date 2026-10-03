@@ -27,6 +27,8 @@ export interface GridCell {
   /** Level (1-based) for node cells and mid-node attribute cells. */
   depth?: number;
   nodeId?: string;
+  /** For attribute cells (filled or empty, in scope): which attribute, so the cell can be edited. */
+  attrId?: string;
 }
 
 /** Inclusive, 0-based. */
@@ -44,6 +46,8 @@ export interface GridColumn {
   header: string;
   /** Pixels. */
   width: number;
+  /** Dropdown choices when the column's attribute is a dropdown (exported as data validation). */
+  options?: string[];
 }
 
 export interface Grid {
@@ -72,6 +76,8 @@ interface Placed {
 
 const hasValue = (v: AttrValue | undefined): v is AttrValue =>
   v !== undefined && !(typeof v === 'string' && v.trim() === '');
+
+const dropdown = (def: AttrDef) => (def.type === 'select' ? { options: def.options ?? [] } : {});
 
 function coerce(def: AttrDef, v: AttrValue): AttrValue {
   if (def.type === 'number' && typeof v === 'string') {
@@ -150,27 +156,27 @@ export function treeToGrid(doc: MapDoc): Grid {
     for (const def of doc.attributes) {
       if (!midUsed[d].has(def.id)) continue;
       midCol[d].set(def.id, columns.length);
-      columns.push({ kind: 'midAttr', level: d, attrId: def.id, header: `${levelName(doc, d)} · ${def.name}`, width: ATTR_WIDTH });
+      columns.push({ kind: 'midAttr', level: d, attrId: def.id, header: `${levelName(doc, d)} · ${def.name}`, width: ATTR_WIDTH, ...dropdown(def) });
     }
   }
   const leafCol = new Map<string, number>();
   for (const def of doc.attributes) {
     if (!leafUsed.has(def.id)) continue;
     leafCol.set(def.id, columns.length);
-    columns.push({ kind: 'leafAttr', attrId: def.id, header: def.name, width: ATTR_WIDTH });
+    columns.push({ kind: 'leafAttr', attrId: def.id, header: def.name, width: ATTR_WIDTH, ...dropdown(def) });
   }
   const width = Math.max(columns.length, 1);
 
   // 3. Title, meta and header rows.
   const rows: GridCell[][] = [];
   const merges: Merge[] = [];
-  const fullRow = (value: string, kind: CellKind) => {
+  const fullRow = (value: string, kind: CellKind, extra: Partial<GridCell> = {}) => {
     const r = rows.length;
-    rows.push(Array.from({ length: width }, (_, c) => (c === 0 ? { value, kind } : { value: null, kind: 'covered' as const })));
+    rows.push(Array.from({ length: width }, (_, c) => (c === 0 ? { value, kind, ...extra } : { value: null, kind: 'covered' as const })));
     if (width > 1) merges.push({ r0: r, c0: 0, r1: r, c1: width - 1 });
   };
   const title = root.text.trim() || 'Untitled breakdown';
-  fullRow(title, 'title');
+  fullRow(title, 'title', { nodeId: root.id });
 
   const rootMeta = doc.attributes
     .filter((def) => hasValue(root.attrs[def.id]) && applies(def, root.id))
@@ -200,8 +206,10 @@ export function treeToGrid(doc: MapDoc): Grid {
       for (const [attrId, c] of leafCol) {
         const def = defs.get(attrId)!;
         const v = p.node.attrs[attrId];
-        if (!applies(def, p.node.id)) rows[dataStart + p.first][c] = { value: null, kind: 'na' };
-        else if (hasValue(v)) rows[dataStart + p.first][c] = { value: coerce(def, v), kind: 'attr', nodeId: p.node.id };
+        rows[dataStart + p.first][c] =
+          !applies(def, p.node.id) ? { value: null, kind: 'na' }
+          : hasValue(v) ? { value: coerce(def, v), kind: 'attr', nodeId: p.node.id, attrId }
+          : { value: null, kind: 'empty', nodeId: p.node.id, attrId };
       }
     } else {
       put(p.first, col, p.last, col, nodeCell);
@@ -210,8 +218,8 @@ export function treeToGrid(doc: MapDoc): Grid {
         const v = p.node.attrs[attrId];
         put(p.first, c, p.last, c,
           !applies(def, p.node.id) ? { value: null, kind: 'na', depth: p.depth }
-          : hasValue(v) ? { value: coerce(def, v), kind: 'attr', depth: p.depth, nodeId: p.node.id }
-          : { value: null, kind: 'empty', depth: p.depth });
+          : hasValue(v) ? { value: coerce(def, v), kind: 'attr', depth: p.depth, nodeId: p.node.id, attrId }
+          : { value: null, kind: 'empty', depth: p.depth, nodeId: p.node.id, attrId });
       }
     }
   }

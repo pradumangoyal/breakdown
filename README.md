@@ -10,8 +10,8 @@ Your maps are saved **only in your browser** (localStorage). Nothing is uploaded
 
 - **Map + outline, always in sync.** Think on a left-to-right mind map, or type fast in an indented outline (toggle with `O`). Both edit the same tree.
 - **Keyboard first.** On the map: `Enter` adds a sibling, `Tab` a child, `⇧Enter` edits, arrows move (↓/↑ go to the next logical node, across branches). Drag nodes to move them. Press `?` for all keys.
-- **Your own attributes.** Add fields like Owner, Status or Notes, and decide where each applies: all nodes, end nodes only, specific levels, or one branch. Fill them in the side panel or the spreadsheet-style **Table** view.
-- **Export to a Sheet.** The **Sheet** view shows exactly what you'll get. Download it as `.xlsx` and open it in Google Sheets or Excel: one row per end node, parent cells merged down, attribute columns placed beside their level, grey cells where an attribute doesn't apply.
+- **Your own attributes.** Add fields like Owner, Status or Notes as text, numbers or **dropdowns** (your own list of choices), and decide where each applies: all nodes, end nodes only, specific levels, or one branch. Fill them in the side panel, the spreadsheet-style **Table** view, or straight in the **Sheet** view.
+- **Export to a Sheet.** The **Sheet** view shows exactly what you'll get, and you can edit it in place: click any cell (a node, a value, a column name), Tab to the next one. Download it as `.xlsx` and open it in Google Sheets or Excel: one row per end node, parent cells merged down, attribute columns placed beside their level, grey cells where an attribute doesn't apply, and dropdown attributes exported as real dropdowns.
 - **My maps.** Create, open, rename, duplicate, export, import and delete maps. Everything autosaves.
 - **Focus mode** (`F`) hides everything but the map.
 

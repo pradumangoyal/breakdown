@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { indexTree } from '../model/tree';
+import { cleanOptions, indexTree } from '../model/tree';
 import { levelLabel } from '../model/scope';
 import type { AttrDef, AttrScope, MapDoc } from '../model/types';
 
@@ -7,7 +7,7 @@ interface Props {
   doc: MapDoc;
   /** Editing an existing attribute; omit to create a new one. */
   attr?: AttrDef;
-  onSave: (name: string, type: AttrDef['type'], scope: AttrScope) => void;
+  onSave: (name: string, type: AttrDef['type'], scope: AttrScope, options?: string[]) => void;
   onCancel: () => void;
   onDelete?: () => void;
 }
@@ -19,6 +19,8 @@ export function AttrForm({ doc, attr, onSave, onCancel, onDelete }: Props) {
   const [nodes, setNodes] = useState<AttrScope['nodes']>(attr?.scope?.nodes ?? 'all');
   const [levels, setLevels] = useState<number[]>(attr?.scope?.levels ?? []);
   const [within, setWithin] = useState(attr?.scope?.within ?? '');
+  /** Dropdown choices, one per line while editing. */
+  const [optionsText, setOptionsText] = useState((attr?.options ?? []).join('\n'));
   const [error, setError] = useState('');
 
   const index = useMemo(() => indexTree(doc), [doc]);
@@ -45,7 +47,9 @@ export function AttrForm({ doc, attr, onSave, onCancel, onDelete }: Props) {
     if (!clean) return setError('Give the attribute a name.');
     if (doc.attributes.some((a) => a.id !== attr?.id && a.name.toLowerCase() === clean.toLowerCase())) return setError(`“${clean}” already exists.`);
     if (nodes === 'levels' && !levels.length) return setError('Pick at least one level.');
-    onSave(clean, type, { nodes, ...(nodes === 'levels' ? { levels: [...levels].sort((a, b) => a - b) } : {}), within: within || null });
+    const options = type === 'select' ? cleanOptions(optionsText.split('\n')) : undefined;
+    if (options && !options.length) return setError('Add at least one choice for the dropdown.');
+    onSave(clean, type, { nodes, ...(nodes === 'levels' ? { levels: [...levels].sort((a, b) => a - b) } : {}), within: within || null }, options);
   };
 
   const toggleLevel = (l: number) => setLevels((ls) => (ls.includes(l) ? ls.filter((x) => x !== l) : [...ls, l]));
@@ -57,8 +61,22 @@ export function AttrForm({ doc, attr, onSave, onCancel, onDelete }: Props) {
         <select value={type} onChange={(e) => setType(e.target.value as AttrDef['type'])} aria-label="Type">
           <option value="text">Text</option>
           <option value="number">Number</option>
+          <option value="select">Dropdown</option>
         </select>
       </div>
+
+      {type === 'select' && (
+        <fieldset>
+          <legend>Choices (one per line)</legend>
+          <textarea
+            className="af-options"
+            rows={Math.min(8, Math.max(3, optionsText.split('\n').length + 1))}
+            placeholder={'To do\nIn progress\nDone'}
+            value={optionsText}
+            onChange={(e) => { setOptionsText(e.target.value); setError(''); }}
+          />
+        </fieldset>
+      )}
 
       <fieldset>
         <legend>Applies to</legend>

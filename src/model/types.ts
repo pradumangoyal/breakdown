@@ -14,7 +14,10 @@ export interface AttrScope {
 export interface AttrDef {
   id: string;
   name: string;
-  type: 'text' | 'number';
+  /** 'select' = dropdown: values are picked from `options`. */
+  type: 'text' | 'number' | 'select';
+  /** Dropdown choices, in order (only for type 'select'). Values not in the list are kept, just flagged. */
+  options?: string[];
   /** Missing = applies to all nodes in the whole map. */
   scope?: AttrScope;
 }
