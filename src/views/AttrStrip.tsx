@@ -78,7 +78,7 @@ export function AttrStrip({ nodeId, className = '', style, onBack, onEnter, onEs
     >
       {fields.map((a) => (
         <label key={a.id} className="attr-strip-field" title={describeScope(doc, a)}>
-          <span>{a.name}</span>
+          <span className="attr-strip-name">{a.name}</span>
           {a.type === 'select' ? (
             <KeySelect label={a.name} value={String(node.attrs[a.id] ?? '')} options={a.options ?? []} onChange={(v) => useEditor.getState().setAttr(nodeId, a.id, v)} />
           ) : (

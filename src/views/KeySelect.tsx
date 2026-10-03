@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * A dropdown made for the keyboard (used beside the node you're editing). Unlike the browser's
@@ -24,6 +24,26 @@ export function KeySelect({ value, options, onChange, label }: {
     setHiState(hiRef.current);
   };
   const typed = useRef({ text: '', at: 0 });
+  const listRef = useRef<HTMLUListElement>(null);
+  const [up, setUp] = useState(false);
+
+  // Open upward when the list would run past the bottom of the map / outline (they clip what overflows).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!open || !list) { setUp(false); return; }
+    const area = list.closest('.mm-viewport, .ol, .ap, .tv')?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+    const btn = list.parentElement!.getBoundingClientRect();
+    const h = list.offsetHeight;
+    setUp(btn.bottom + h > area.bottom && btn.top - h > area.top);
+  }, [open]);
+  // Keep the highlighted choice in sight in a long list (scrolls only the list, never the map behind it).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const item = list?.children[hi] as HTMLElement | undefined;
+    if (!open || !list || !item) return;
+    if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
+    else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+  }, [open, hi]);
 
   const show = (o: string) => (o === '' ? '—' : o === value && stray ? `${o} (not in list)` : o);
   const openList = () => { setHi(index); setOpen(true); };
@@ -87,7 +107,7 @@ export function KeySelect({ value, options, onChange, label }: {
         <span className="ks-caret" aria-hidden>▾</span>
       </button>
       {open && (
-        <ul className="ks-list" role="listbox" aria-label={label}>
+        <ul ref={listRef} className={`ks-list${up ? ' up' : ''}`} role="listbox" aria-label={label}>
           {all.map((o, i) => (
             <li
               key={o || '__none'}
